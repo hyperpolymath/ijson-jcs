@@ -1,0 +1,39 @@
+# SPDX-License-Identifier: MPL-2.0
+# Copyright (c) 2026 Hyperpolymath Estate
+#
+# I-JSON (RFC 7493) validator + JCS (RFC 8785) canonicalizer
+# Forked and enhanced from meta-repos/groove/cli/src/canonical.rs
+
+[package]
+name = "ijson-jcs"
+version = "0.1.0"
+edition = "2024"
+authors = ["Hyperpolymath Estate"]
+description = "I-JSON validation and JCS canonicalization library for deterministic JSON handling"
+license = "MPL-2.0"
+repository = "https://github.com/hyperpolymath/ijson-jcs"
+keywords = ["json", "ijson", "rfc7493", "jcs", "rfc8785", "canonical", "deterministic", "hashing", "signing"]
+categories = ["encoding", "data-structures", "cryptography"]
+
+[dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+thiserror = "2"
+
+[dev-dependencies]
+anyhow = "1"
+
+[features]
+default = ["std"]
+std = []
+
+[profile.release]
+lto = true
+codegen-units = 1
+strip = "symbols"
+
+[package.metadata.docs.rs]
+all-features = true
+
+# Maintain compatibility with the Groove implementation
+# groove = "0.3.0"

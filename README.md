@@ -129,6 +129,67 @@ let canonical_string = to_jcs_string(&value)?;
 // canonical_string == "{\"a\":2,\"b\":1}"
 ```
 
+## Command-Line Tool
+
+The crate ships an `ijson-jcs` binary so other repositories can check or
+produce canonical JSON without writing Rust.
+
+```bash
+cargo build --release          # → target/release/ijson-jcs
+cargo install --path .         # or install it on your PATH
+```
+
+```text
+ijson-jcs check FILE...    Report whether each FILE is canonical
+ijson-jcs fix FILE...      Rewrite each valid FILE in canonical form
+ijson-jcs canon            Canonicalise stdin to stdout
+ijson-jcs --help           Show help
+ijson-jcs --version        Show the version
+```
+
+Input is always parsed as strict I-JSON (`JsonMode::Canonical`): duplicate
+keys, lone surrogates, noncharacters, invalid UTF-8, numbers outside the
+IEEE-754 double range and integers outside ±(2^53−1) are reported as invalid.
+
+- **`check`** prints `OK path`, `NOT CANONICAL path` or `INVALID path: reason`
+  for each file, on stdout.
+- **`fix`** rewrites each valid, non-canonical file to the JCS form followed by
+  a single `\n` and prints `FIXED path`; already-correct files print `OK path`
+  and are not written. Invalid files print `INVALID path: reason` and are left
+  untouched; the other files are still processed.
+- **`canon`** reads all of stdin and writes the JCS form to stdout with **no**
+  trailing newline, so the output is exactly the bytes to hash or sign. Errors
+  go to stderr as `INVALID <stdin>: reason`.
+
+Use `--` before file names that begin with `-`.
+
+### The trailing-newline rule
+
+JCS output has no trailing newline, but editors and POSIX tools expect text
+files to end with one. `check` therefore accepts a file whose bytes are the
+canonical form **optionally followed by exactly one `\n`**. Anything else —
+two newlines, `\r\n`, a trailing space, leading whitespace — is
+`NOT CANONICAL`. `fix` always writes the canonical form plus one `\n`. If you
+hash a checked file, strip that single final `\n` first (or hash the output
+of `ijson-jcs canon < file`).
+
+### Exit status
+
+| Code | `check` | `fix` | `canon` |
+|---|---|---|---|
+| 0 | every file canonical | every file valid (fixed or already OK) | success |
+| 1 | some file valid but not canonical, none invalid | — | — |
+| 2 | some file invalid or unreadable | some file invalid, unreadable or unwritable | invalid input |
+
+A usage error (unknown command or option, missing `FILE`) also exits 2.
+
+### Example: CI gate
+
+```bash
+ijson-jcs check $(git ls-files '*.canonical.json') || {
+  echo "run: ijson-jcs fix <files>"; exit 1; }
+```
+
 ## API Reference
 
 ### Main Types
@@ -205,14 +266,16 @@ JCS requires that object keys be sorted by UTF-16 code unit order, not simple st
 
 - **Safe Integers**: Integers in [-(2^53)+1, (2^53)-1] are serialized as numbers
 - **Unsafe Integers**: Larger integers are flagged as validation errors (I-JSON recommendation)
-- **Floats**: Allowed but users should consider string representation for exactness
+- **Floats**: Allowed but users should consider string representation for exactness. Canonical output uses the ECMAScript `Number.prototype.toString` algorithm required by RFC 8785 §3.2.2.3 (`1E30` → `1e+30`, `4.50` → `4.5`, `-0` → `0`, `1e-7` → `1e-7`)
+- **Parsing**: Numbers are read with serde_json's `float_roundtrip` feature, so every decimal is rounded correctly to the nearest double; numbers outside the double range (e.g. `1e400`) are rejected
 - **Special Values**: NaN and Infinity are rejected (not valid RFC 8259 JSON)
 
 ### Unicode Safety
 
 - **Unpaired Surrogates**: U+D800..U+DFFF are rejected
 - **Noncharacters**: U+FDD0..U+FDEF, U+FFFE, U+FFFF, U+1FFFE, U+1FFFF, etc. are rejected
-- **Control Characters**: Only U+0009 (TAB), U+000A (LF), U+000D (CR) are allowed in strings
+- **Control Characters**: Allowed when escaped, as RFC 8259 requires (RFC 7493 §2.1 does not forbid them; RFC 8785 §3.2.3's sample contains `\u000F`). Raw, unescaped control characters are rejected by the JSON parser.
+- **Duplicate Keys**: `JsonMode::Strict` and `JsonMode::Canonical` reject a repeated key while parsing (a parsed `serde_json::Value` cannot show duplicates afterwards). `JsonMode::Loose` keeps serde_json's last-value-wins behaviour.
 
 ## Performance
 
@@ -241,7 +304,12 @@ ijson-jcs/
 │   ├── lib.rs          # Main exports and convenience functions
 │   ├── error.rs        # Comprehensive error types
 │   ├── ijson.rs        # I-JSON validation implementation
-│   └── jcs.rs          # JCS canonicalization implementation
+│   ├── jcs.rs          # JCS canonicalization implementation
+│   ├── strict.rs       # Duplicate-key-rejecting parser (strict modes)
+│   └── bin/
+│       └── ijson-jcs.rs  # Command-line tool
+├── tests/
+│   └── cli.rs          # Integration tests for the CLI
 └── target/             # Build artifacts (gitignored)
 ```
 

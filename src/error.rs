@@ -10,8 +10,6 @@ use thiserror::Error;
 
 use crate::JsonMode;
 
-
-
 /// Top-level error type for I-JSON operations
 #[derive(Debug, Error)]
 pub enum IJsonError {
@@ -43,7 +41,10 @@ pub enum IJsonError {
 impl IJsonError {
     /// Returns true if this error is a validation error (not parsing)
     pub fn is_validation_error(&self) -> bool {
-        matches!(self, Self::ValidationError(_) | Self::CanonicalizationError(_))
+        matches!(
+            self,
+            Self::ValidationError(_) | Self::CanonicalizationError(_)
+        )
     }
 
     /// Returns true if this error is a parsing error
@@ -98,7 +99,9 @@ pub enum ValidationError {
 
     /// Number is outside the safe integer range for IEEE-754 binary64
     /// Safe range: [-(2^53)+1, (2^53)-1] = [-9007199254740991, 9007199254740991]
-    #[error("Number outside safe integer range: {value} (must be in [-(2^53)+1, (2^53)-1] for exact IEEE-754 binary64 representation)")]
+    #[error(
+        "Number outside safe integer range: {value} (must be in [-(2^53)+1, (2^53)-1] for exact IEEE-754 binary64 representation)"
+    )]
     UnsafeInteger {
         /// The value that is outside the safe range
         value: String,
@@ -177,7 +180,10 @@ impl ValidationError {
 
     /// Returns true if this is a number validation error
     pub fn is_number_error(&self) -> bool {
-        matches!(self, Self::UnsafeInteger { .. } | Self::NonFiniteNumber { .. })
+        matches!(
+            self,
+            Self::UnsafeInteger { .. } | Self::NonFiniteNumber { .. }
+        )
     }
 }
 
@@ -225,8 +231,6 @@ impl fmt::Display for ParseMode {
     }
 }
 
-
-
 /// Conversion from UTF-8 errors to I-JSON errors
 impl From<Utf8Error> for IJsonError {
     fn from(error: Utf8Error) -> Self {
@@ -243,10 +247,6 @@ impl From<SerdeJsonError> for IJsonError {
         Self::ParseError { source: error }
     }
 }
-
-
-
-
 
 #[cfg(test)]
 mod tests {

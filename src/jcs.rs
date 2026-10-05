@@ -50,9 +50,9 @@ use crate::ijson;
 /// The safe integer limits for IEEE-754 binary64
 /// Numbers outside this range cannot be represented exactly as doubles
 /// and MUST be represented as strings in I-JSON for exactness
-const SAFE_INT_MIN: i64 = -9007199254740991;    // -(2^53 - 1)
-const SAFE_INT_MAX: i64 = 9007199254740991;      // 2^53 - 1
-const SAFE_UINT_MAX: u64 = 9007199254740991;    // 2^53 - 1
+const SAFE_INT_MIN: i64 = -9007199254740991; // -(2^53 - 1)
+const SAFE_INT_MAX: i64 = 9007199254740991; // 2^53 - 1
+const SAFE_UINT_MAX: u64 = 9007199254740991; // 2^53 - 1
 
 /// Canonicalize a JSON value to JCS format (RFC 8785)
 ///
@@ -113,40 +113,88 @@ fn write_canonical(value: &Value, out: &mut Vec<u8>) -> Result<(), Canonicalizat
     Ok(())
 }
 
-/// Write a number in JCS format
+/// Write a number in JCS format (RFC 8785 §3.2.2.3)
 ///
-/// Uses ES number-to-string rules via serde_json for consistency,
-/// but with special handling for integers outside the safe range.
-fn write_number_jcs(n: &serde_json::Number, out: &mut Vec<u8>) -> Result<(), CanonicalizationError> {
-    // Check if it's an integer within safe range
-    if let Some(i) = n.as_i64() {
-        if i >= SAFE_INT_MIN && i <= SAFE_INT_MAX {
-            // Safe integer - use standard serialization
-            out.extend_from_slice(i.to_string().as_bytes());
-            return Ok(());
-        }
-    } else if let Some(u) = n.as_u64() {
-        if u <= SAFE_UINT_MAX {
-            // Safe unsigned integer - use standard serialization
-            out.extend_from_slice(u.to_string().as_bytes());
-            return Ok(());
-        }
+/// Integers in the safe range are written as decimal integers. Everything
+/// else is treated as an IEEE-754 double and written with the ECMAScript
+/// `Number.prototype.toString` algorithm, which is what JCS mandates.
+fn write_number_jcs(
+    n: &serde_json::Number,
+    out: &mut Vec<u8>,
+) -> Result<(), CanonicalizationError> {
+    if let Some(i) = n
+        .as_i64()
+        .filter(|i| (SAFE_INT_MIN..=SAFE_INT_MAX).contains(i))
+    {
+        out.extend_from_slice(i.to_string().as_bytes());
+        return Ok(());
+    }
+    if let Some(u) = n.as_u64().filter(|u| *u <= SAFE_UINT_MAX) {
+        out.extend_from_slice(u.to_string().as_bytes());
+        return Ok(());
     }
 
-    // For floats or integers outside safe range:
-    // I-JSON recommends that integers outside the safe range be represented as strings
-    // for exactness. However, JCS operates on the input data as given.
-    // 
-    // Since we've already validated I-JSON compliance, and I-JSON allows floats,
-    // we serialize the number as-is using serde_json's serialization.
-    //
-    // Note: This means integers outside the safe range will be serialized as
-    // numbers, which may lose precision. Users should convert such integers
-    // to strings before canonicalization if exactness is required.
-    let s = serde_json::to_string(n)
-        .map_err(|e| CanonicalizationError::NumberFormatError(e.to_string()))?;
-    out.extend_from_slice(s.as_bytes());
+    // Integers outside the safe range are rejected by I-JSON validation
+    // before we get here; anything left is a double.
+    let f = n
+        .as_f64()
+        .ok_or_else(|| CanonicalizationError::NumberFormatError(n.to_string()))?;
+    out.extend_from_slice(es_number_to_string(f)?.as_bytes());
     Ok(())
+}
+
+/// Format a finite double exactly as ECMAScript `Number.prototype.toString`.
+///
+/// Implements ECMA-262 §6.1.6.1.20 (Number::toString) for radix 10, which
+/// RFC 8785 §3.2.2.3 adopts: shortest round-tripping digits, plain notation
+/// for decimal exponents in (-7, 21], otherwise `d.ddde±x`; `-0` becomes `0`.
+pub(crate) fn es_number_to_string(f: f64) -> Result<String, CanonicalizationError> {
+    if !f.is_finite() {
+        return Err(CanonicalizationError::NumberFormatError(f.to_string()));
+    }
+    if f == 0.0 {
+        return Ok("0".to_string());
+    }
+
+    // Rust's `{:e}` yields the shortest digit string that round-trips,
+    // e.g. "1.2345e-7" or "-4.5e0".
+    let sci = format!("{:e}", f.abs());
+    let (mantissa, exp) = sci
+        .split_once('e')
+        .ok_or_else(|| CanonicalizationError::NumberFormatError(sci.clone()))?;
+    let exp: i32 = exp
+        .parse()
+        .map_err(|_| CanonicalizationError::NumberFormatError(sci.clone()))?;
+    let digits: String = mantissa.chars().filter(|c| *c != '.').collect();
+    let k = digits.len() as i32;
+    let n = exp + 1; // position of the decimal point relative to the digits
+
+    let mut s = String::with_capacity(32);
+    if f < 0.0 {
+        s.push('-');
+    }
+    if k <= n && n <= 21 {
+        s.push_str(&digits);
+        s.extend(std::iter::repeat_n('0', (n - k) as usize));
+    } else if 0 < n && n <= 21 {
+        s.push_str(&digits[..n as usize]);
+        s.push('.');
+        s.push_str(&digits[n as usize..]);
+    } else if -6 < n && n <= 0 {
+        s.push_str("0.");
+        s.extend(std::iter::repeat_n('0', (-n) as usize));
+        s.push_str(&digits);
+    } else {
+        s.push_str(&digits[..1]);
+        if k > 1 {
+            s.push('.');
+            s.push_str(&digits[1..]);
+        }
+        s.push('e');
+        s.push(if n - 1 < 0 { '-' } else { '+' });
+        s.push_str(&(n - 1).abs().to_string());
+    }
+    Ok(s)
 }
 
 /// Write a string in JCS format
@@ -175,7 +223,10 @@ fn write_array_jcs(arr: &[Value], out: &mut Vec<u8>) -> Result<(), Canonicalizat
 }
 
 /// Write an object in JCS format with keys sorted by UTF-16 code unit order
-fn write_object_jcs(map: &serde_json::Map<String, Value>, out: &mut Vec<u8>) -> Result<(), CanonicalizationError> {
+fn write_object_jcs(
+    map: &serde_json::Map<String, Value>,
+    out: &mut Vec<u8>,
+) -> Result<(), CanonicalizationError> {
     // Collect keys and sort by UTF-16 code unit order
     let mut keys: Vec<&String> = map.keys().collect();
     sort_keys_utf16(&mut keys);
@@ -185,12 +236,12 @@ fn write_object_jcs(map: &serde_json::Map<String, Value>, out: &mut Vec<u8>) -> 
         if i > 0 {
             out.push(b',');
         }
-        
+
         // Write the key (with quotes and escaping via serde_json)
         let key_str = serde_json::to_string(key).expect("Key is always serializable");
         out.extend_from_slice(key_str.as_bytes());
         out.push(b':');
-        
+
         // Write the value
         write_canonical(&map[*key], out)?;
     }
@@ -255,29 +306,32 @@ mod tests {
         let value = json!({"b": 1, "a": {"z": true, "m": [1, 2, "x"]}, "c": null});
         let canonical = to_jcs(&value).unwrap();
         let canonical_str = String::from_utf8(canonical).unwrap();
-        
+
         // Should have sorted keys and minimal separators
-        assert_eq!(canonical_str, r#"{"a":{"m":[1,2,"x"],"z":true},"b":1,"c":null}"#);
+        assert_eq!(
+            canonical_str,
+            r#"{"a":{"m":[1,2,"x"],"z":true},"b":1,"c":null}"#
+        );
     }
 
     #[test]
     fn test_insertion_order_does_not_matter() {
         let a = json!({"x": 1, "y": 2});
         let b: Value = serde_json::from_str(r#"{"y": 2, "x": 1}"#).unwrap();
-        
+
         let canon_a = to_jcs(&a).unwrap();
         let canon_b = to_jcs(&b).unwrap();
-        
+
         assert_eq!(canon_a, canon_b);
     }
 
     #[test]
     fn test_floats_are_handled() {
         // Unlike the original Groove implementation, we handle floats
-        let value = json!({"ratio": 0.5, "pi": 3.14159});
+        let value = json!({"ratio": 0.5, "pi": 1.2345});
         let canonical = to_jcs(&value).unwrap();
-        
-        assert!(canonical.len() > 0);
+
+        assert!(!canonical.is_empty());
         let canonical_str = String::from_utf8(canonical).unwrap();
         assert!(canonical_str.contains("ratio"));
         assert!(canonical_str.contains("pi"));
@@ -293,10 +347,10 @@ mod tests {
                 }
             }
         });
-        
+
         let canonical = to_jcs(&value).unwrap();
         let canonical_str = String::from_utf8(canonical).unwrap();
-        
+
         // Should have nested key sorting
         assert!(canonical_str.contains("outer"));
         assert!(canonical_str.contains("z"));
@@ -309,7 +363,7 @@ mod tests {
         let value = json!({"arr": [3, 1, 2]});
         let canonical = to_jcs(&value).unwrap();
         let canonical_str = String::from_utf8(canonical).unwrap();
-        
+
         // Array order should be preserved
         assert!(canonical_str.contains("[3,1,2]"));
     }
@@ -319,7 +373,7 @@ mod tests {
         let value = json!({"s": "a\"b\\c\nd"});
         let canonical = to_jcs(&value).unwrap();
         let canonical_str = String::from_utf8(canonical).unwrap();
-        
+
         // Should have proper escaping
         assert_eq!(canonical_str, r#"{"s":"a\"b\\c\nd"}"#);
     }
@@ -331,7 +385,7 @@ mod tests {
         let value = json!({"café": 1, "cafe": 2});
         let canonical = to_jcs(&value).unwrap();
         let canonical_str = String::from_utf8(canonical).unwrap();
-        
+
         // Both should be present
         assert!(canonical_str.contains("café"));
         assert!(canonical_str.contains("cafe"));
@@ -339,30 +393,12 @@ mod tests {
 
     #[test]
     fn test_empty_values() {
-        assert_eq!(
-            to_jcs(&json!(null)).unwrap(),
-            b"null"
-        );
-        assert_eq!(
-            to_jcs(&json!(true)).unwrap(),
-            b"true"
-        );
-        assert_eq!(
-            to_jcs(&json!(false)).unwrap(),
-            b"false"
-        );
-        assert_eq!(
-            to_jcs(&json!([])).unwrap(),
-            b"[]"
-        );
-        assert_eq!(
-            to_jcs(&json!({})).unwrap(),
-            b"{}"
-        );
-        assert_eq!(
-            to_jcs(&json!("")).unwrap(),
-            b"\"\""
-        );
+        assert_eq!(to_jcs(&json!(null)).unwrap(), b"null");
+        assert_eq!(to_jcs(&json!(true)).unwrap(), b"true");
+        assert_eq!(to_jcs(&json!(false)).unwrap(), b"false");
+        assert_eq!(to_jcs(&json!([])).unwrap(), b"[]");
+        assert_eq!(to_jcs(&json!({})).unwrap(), b"{}");
+        assert_eq!(to_jcs(&json!("")).unwrap(), b"\"\"");
     }
 
     #[test]
@@ -370,7 +406,7 @@ mod tests {
         let input = r#"{"b": 1, "a": 2}"#;
         let canonical = canonicalize_json(input).unwrap();
         let canonical_str = String::from_utf8(canonical).unwrap();
-        
+
         assert_eq!(canonical_str, r#"{"a":2,"b":1}"#);
     }
 
@@ -379,11 +415,11 @@ mod tests {
         // Test that JCS canonicalization rejects invalid I-JSON
         // Since we can't easily create invalid I-JSON with serde_json,
         // we'll test with a value that has an unsafe integer
-        
+
         // Use the maximum i64 value which is definitely outside the safe range
         let large_int = i64::MAX; // 9223372036854775807
         let value = json!({"big": large_int});
-        
+
         let result = to_jcs(&value);
         assert!(result.is_err());
         assert!(result.unwrap_err().is_validation_error());
@@ -394,8 +430,8 @@ mod tests {
         // Test safe integers are serialized normally
         let value = json!({"min": SAFE_INT_MIN, "max": SAFE_INT_MAX});
         let canonical = to_jcs(&value).unwrap();
-        
-        assert!(canonical.len() > 0);
+
+        assert!(!canonical.is_empty());
     }
 
     #[test]
@@ -403,15 +439,46 @@ mod tests {
         // Test safe unsigned integers
         let value = json!({"max_uint": SAFE_UINT_MAX});
         let canonical = to_jcs(&value).unwrap();
-        
-        assert!(canonical.len() > 0);
+
+        assert!(!canonical.is_empty());
     }
 
     #[test]
     fn test_to_jcs_string() {
         let value = json!({"a": 1});
         let canonical_str = to_jcs_string(&value).unwrap();
-        
+
         assert_eq!(canonical_str, r#"{"a":1}"#);
+    }
+
+    /// Doubles format per ECMAScript Number::toString (RFC 8785 Appendix B).
+    #[test]
+    fn test_es_number_formatting() {
+        // RFC 8785 Appendix B sample values
+        let cases: &[(f64, &str)] = &[
+            (0.0, "0"),
+            (-0.0, "0"),
+            (1e30, "1e+30"),
+            (4.50, "4.5"),
+            (0.002, "0.002"),
+            (1e-7, "1e-7"),
+            (0.000001, "0.000001"),
+            (1e21, "1e+21"),
+            (1e20, "100000000000000000000"),
+            (123456789012345680000.0, "123456789012345680000"),
+            (-1.5e-9, "-1.5e-9"),
+            (9007199254740992.0, "9007199254740992"),
+            (5e-324, "5e-324"),
+            (-5e-324, "-5e-324"),
+            (1.7976931348623157e308, "1.7976931348623157e+308"),
+            (333333333.3333333, "333333333.3333333"),
+            (1.0, "1"),
+            (-1.25, "-1.25"),
+        ];
+        for (f, want) in cases {
+            assert_eq!(es_number_to_string(*f).unwrap(), *want, "formatting {f:e}");
+        }
+        assert!(es_number_to_string(f64::NAN).is_err());
+        assert!(es_number_to_string(f64::INFINITY).is_err());
     }
 }

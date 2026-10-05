@@ -50,14 +50,16 @@
 mod error;
 mod ijson;
 mod jcs;
+mod strict;
 
 use std::fmt;
 
 /// JSON parsing and validation modes
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
 pub enum JsonMode {
     /// Parse any valid JSON (standard serde_json behavior)
-    /// No I-JSON validation, preserves key order
+    /// No I-JSON validation; a repeated key keeps its last value
+    #[default]
     Loose,
 
     /// Parse JSON and validate I-JSON compliance
@@ -67,12 +69,6 @@ pub enum JsonMode {
     /// Parse JSON, validate I-JSON, and prepare for JCS canonicalization
     /// Most strict mode - ensures data is suitable for hashing/signing
     Canonical,
-}
-
-impl Default for JsonMode {
-    fn default() -> Self {
-        Self::Loose
-    }
 }
 
 impl fmt::Display for JsonMode {
@@ -87,7 +83,7 @@ impl fmt::Display for JsonMode {
 
 pub use error::{CanonicalizationError, IJsonError, ParseMode, ValidationError};
 pub use ijson::{is_i_json, validate_canonicalizable, validate_i_json};
-pub use jcs::{to_jcs, to_jcs_string, canonicalize};
+pub use jcs::{canonicalize, to_jcs, to_jcs_string};
 
 pub use serde_json::Value;
 
@@ -115,8 +111,16 @@ pub use serde_json::Value;
 /// // Canonical mode - validates and prepares for JCS canonicalization
 /// let value = parse_json(r#"{"b": 1, "a": 2}"#, JsonMode::Canonical).unwrap();
 /// ```
+///
+/// In `Strict` and `Canonical` modes an object with a repeated key is
+/// rejected (RFC 7493 §2.3) during parsing, since a parsed `Value` can no
+/// longer show that a duplicate existed.
 pub fn parse_json(input: &str, mode: JsonMode) -> Result<Value, IJsonError> {
-    let value = serde_json::from_str(input).map_err(|e| IJsonError::ParseError { source: e })?;
+    let parsed = match mode {
+        JsonMode::Loose => serde_json::from_str(input),
+        JsonMode::Strict | JsonMode::Canonical => strict::from_str_no_duplicates(input),
+    };
+    let value = parsed.map_err(|e| IJsonError::ParseError { source: e })?;
 
     match mode {
         JsonMode::Loose => Ok(value),
@@ -134,8 +138,8 @@ pub fn parse_json(input: &str, mode: JsonMode) -> Result<Value, IJsonError> {
 
 /// Parse JSON bytes with the specified mode
 pub fn parse_json_bytes(input: &[u8], mode: JsonMode) -> Result<Value, IJsonError> {
-    let input_str = std::str::from_utf8(input)
-        .map_err(|e| IJsonError::EncodingError { source: e, mode })?;
+    let input_str =
+        std::str::from_utf8(input).map_err(|e| IJsonError::EncodingError { source: e, mode })?;
     parse_json(input_str, mode)
 }
 
@@ -149,7 +153,6 @@ pub fn to_json_pretty_string(value: &Value) -> String {
     serde_json::to_string_pretty(value).expect("Value is always serializable")
 }
 
-/// Check if a string contains valid I-JSON
 /// Check if a string contains valid I-JSON
 pub fn is_valid_i_json_string(input: &str) -> bool {
     parse_json(input, JsonMode::Strict).is_ok()
@@ -180,22 +183,24 @@ mod tests {
         assert!(value.is_object());
     }
 
+    /// Strict helpers reject duplicate keys; loose parsing still accepts them.
     #[test]
     fn test_validation_helpers() {
         assert!(is_valid_i_json_string(r#"{"a": 1}"#));
-        // serde_json handles duplicate keys by keeping the last one,
-        // so this becomes valid JSON with a single key
-        assert!(is_valid_i_json_string(r#"{"k":1,"k":2}"#));
+        // RFC 7493 §2.3: duplicate keys are not I-JSON
+        assert!(!is_valid_i_json_string(r#"{"k":1,"k":2}"#));
+        // ...but loose mode keeps serde_json's last-wins behaviour
+        assert!(parse_json(r#"{"k":1,"k":2}"#, JsonMode::Loose).is_ok());
 
         assert!(is_valid_i_json_bytes(b"{\"a\": 1}"));
-        assert!(is_valid_i_json_bytes(b"{\"k\":1,\"k\":2}"));
+        assert!(!is_valid_i_json_bytes(b"{\"k\":1,\"k\":2}"));
     }
 
     #[test]
     fn test_serialization() {
         let value = json!({"a": 1, "b": 2});
         assert_eq!(to_json_string(&value), r#"{"a":1,"b":2}"#);
-        
+
         let pretty = to_json_pretty_string(&value);
         assert!(pretty.contains('\n'));
     }

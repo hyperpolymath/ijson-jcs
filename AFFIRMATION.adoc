@@ -1,0 +1,231 @@
+// SPDX-License-Identifier: CC-BY-SA-4.0
+// SPDX-FileCopyrightText: 2026 Jonathan D.A. Jewell <j.d.a.jewell@open.ac.uk>
+= AFFIRMATION: ijson-jcs, as of 2026-10-07
+Jonathan D.A. Jewell <j.d.a.jewell@open.ac.uk>
+:toc: macro
+:toclevels: 2
+:icons: font
+:std-docs: https://github.com/hyperpolymath/standards/blob/main/docs
+
+_This file states what was true and checkable at one commit, and how it was checked._
+
+[NOTE]
+====
+An affirmation is a dated declaration of what we believe is true. This one is
+profile A (evidential) of the
+link:{std-docs}/AFFIRMATION-STANDARD.adoc[AFFIRMATION standard].
+
+This file is optional. Delete it rather than keep it unverified, because a
+stale affirmation is worse than none.
+====
+
+toc::[]
+
+== What this is, and how it works
+
+*What it is.* A dated, signed record of what can be claimed about
+*ijson-jcs* at one exact commit. It makes no promises about the future; the
+README covers that.
+
+*What the project is.* A Rust library and command-line tool. It validates
+I-JSON (RFC 7493) and canonicalises to JCS (RFC 8785). It is the estate's JSON
+standard (ruling D306): in this estate, a JSON file is valid when
+`ijson-jcs check` prints `OK`.
+
+*How it stays trustworthy.* Every claim below comes from running `cargo` and
+the built binary in the session that wrote this file. The anchor names the
+exact commit. A signed git commit lands the file.
+
+== The epistemic contract
+
+This file records our best belief at the timestamp below. It does not guarantee
+correctness. It does guarantee no intentional overclaim: where there is no CI,
+we say so rather than imply a green build.
+
+You may conclude that:
+
+* every claim below was produced by running the tool at the anchor commit, not
+  copied from memory or from a status document.
+
+You may *not* conclude that:
+
+* anything is true at a later commit;
+* anything this file does not list passes. Silence is not a claim.
+
+Anyone may challenge any claim here with a counter-example or a failing run.
+
+[#verifiable-anchor]
+== Verifiable anchor
+
+[cols="1,2", options="header"]
+|===
+| Field | Contents
+
+| Repo
+| `hyperpolymath/ijson-jcs`
+
+| Branch
+| `main`
+
+| Commit (HEAD)
+| `0fdeea716fd558e9807362acf6f8202d56d8d88f`
+
+| Permalink
+| https://github.com/hyperpolymath/ijson-jcs/tree/0fdeea716fd558e9807362acf6f8202d56d8d88f
+
+| Verified (UTC)
+| `2026-10-07T10:19:39Z` (tests), `2026-10-07T10:28:10Z` (fmt, clippy,
+  CLI round-trip)
+
+| Working-tree delta at verification
+| `clean`. A detached worktree at `origin/main`. `git status --short` was
+  empty; `target/` is build output and is ignored.
+
+| Toolchain
+| rustc 1.99.0 (`b940084d7`, 2026-09-28), cargo 1.99.0, Rust edition 2024,
+  on Debian 13 (WSL2, Linux 6.18.33.2).
+|===
+
+[WARNING]
+====
+If you are reading this at a later commit, these claims may no longer hold.
+Re-run the steps in <<reproduce>> and write a new affirmation. Do not rely on a
+stale one.
+====
+
+== Companion documents and repo metadata
+
+[cols="1,3", options="header"]
+|===
+| Item | State at the anchor
+
+| `README.md`
+| Present, but Markdown (see <<outstanding>>).
+
+| `EXPLAINME.adoc`
+| Absent.
+
+| GitHub description
+| Names I-JSON (RFC 7493), JCS (RFC 8785), the library, the
+  `check`/`fix`/`canon` CLI and ruling D306. Set on 2026-10-07.
+
+| GitHub topics
+| 13 topics, set on 2026-10-07 (there were none before).
+|===
+
+== The honest state
+
+=== What is solid, and how we checked
+
+[cols="2,1,3", options="header"]
+|===
+| Claim | Result | Command
+
+| Library unit tests pass
+| 38 passed, 0 failed
+| `cargo test --release`
+
+| CLI integration tests pass (`tests/cli.rs`)
+| 11 passed, 0 failed
+| `cargo test --release`
+
+| Doc tests pass
+| 3 passed, 0 failed
+| `cargo test --release`
+
+| Formatting is clean
+| rc=0
+| `cargo fmt --check`
+
+| No clippy warnings on any target, with warnings as errors
+| rc=0
+| `cargo clippy --release --all-targets -- -D warnings`
+
+| `check` accepts canonical JSON
+| `OK`, rc=0
+| `ijson-jcs check ok.json` with `{"a":1,"b":2}`
+
+| `check` flags valid but non-canonical JSON
+| `NOT CANONICAL`, rc=1
+| `ijson-jcs check order.json` with `{"b":2,"a":1}`
+
+| `check` rejects a duplicate key (RFC 7493 §2.3)
+| `INVALID … duplicate object key "a"`, rc=2
+| `ijson-jcs check dup.json` with `{"a":1,"a":2}`
+
+| `fix` writes the JCS bytes plus one trailing newline, which then pass `check`
+| `{"a":1,"b":2}\n`, then `OK`, rc=0
+| `ijson-jcs fix order.json; ijson-jcs check order.json`
+|===
+
+That is 52 tests in all, with 0 failures.
+
+=== The nuance you must not lose
+
+* The library has three parse modes. `parse_json` with `JsonMode::Strict` or
+  `JsonMode::Canonical` rejects duplicate keys. `JsonMode::Loose` goes through
+  `serde_json` and keeps the last duplicate *silently*. A caller that links
+  the library and wants I-JSON must use Strict or Canonical, never Loose.
+* Before commit `0fdeea7`, `parse_json` had no strict path. Older checkouts,
+  including the commit before `0fdeea7`, accept duplicate keys.
+* This file checks behaviour on a handful of controls. It does not claim
+  conformance with every RFC 8785 number-serialisation case.
+
+[#outstanding]
+=== Outstanding, weak or refuted
+
+* *No CI.* The repo has no `.github/` directory, and the Actions API reports
+  0 workflow runs. No check runs at all exist on the anchor commit. Every result
+  in this file is local.
+* *README is Markdown.* The estate's documentation standard bans `README.md`
+  in favour of `README.adoc`. There is no `EXPLAINME.adoc`.
+* *No `LICENSES/` directory and no `LICENSE` file.* The licence is declared
+  only as `license = "MPL-2.0"` in `Cargo.toml`. This file's CC-BY-SA-4.0
+  header has no matching licence text in the repo.
+
+[#reproduce]
+== Reproduce it yourself
+
+[source,bash]
+----
+git clone https://github.com/hyperpolymath/ijson-jcs
+cd ijson-jcs
+git checkout 0fdeea716fd558e9807362acf6f8202d56d8d88f
+cargo test --release                       # expect: 38 + 0 + 11 + 3 passed
+cargo fmt --check
+cargo clippy --release --all-targets -- -D warnings
+printf '{"a":1,"b":2}' > ok.json;    target/release/ijson-jcs check ok.json     # rc=0
+printf '{"b":2,"a":1}' > order.json; target/release/ijson-jcs check order.json  # rc=1
+printf '{"a":1,"a":2}' > dup.json;   target/release/ijson-jcs check dup.json    # rc=2
+----
+
+== One-line characterisation
+
+At `0fdeea7`, ijson-jcs passes 52 tests, `fmt` and `clippy -D warnings`
+locally. Its CLI separates canonical (rc 0), non-canonical (rc 1) and invalid
+(rc 2) JSON, including duplicate keys. It has no CI, no AsciiDoc README and no
+licence file.
+
+== Joint attestation
+
+We assert that, to the best of our joint belief at the timestamp above, every
+claim in this file is true and was checked as described. The open gaps are
+stated, not hidden.
+
+* *Engineering party (AI):* Claude Opus 5.5 (`claude-opus-5-5`) ran the checks
+  recorded here between `2026-10-07T10:19:39Z` and `2026-10-07T10:28:10Z`. It
+  stands behind the wording above as a faithful report of those runs.
+* *Owner / maintainer:* Jonathan D.A. Jewell <j.d.a.jewell@open.ac.uk> signs
+  by committing this file with `-S`. The git commit signature over this
+  content, at the commit SHA recorded above, is the cryptographic form of this
+  affirmation.
+
+[source,bash]
+----
+git commit -S -s AFFIRMATION.adoc -m "docs: affirm state at 0fdeea716fd558e9807362acf6f8202d56d8d88f"
+git log --show-signature -1
+----
+
+The file is landed by a signed git commit. Check with `git log --show-signature`
+that the anchor SHA above matches the parent of the commit that introduced this
+affirmation. If they do not match, read this file as a draft.

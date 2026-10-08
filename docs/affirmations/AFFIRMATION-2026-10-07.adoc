@@ -1,14 +1,22 @@
 // SPDX-License-Identifier: CC-BY-SA-4.0
 // SPDX-FileCopyrightText: 2026 Jonathan D.A. Jewell <j.d.a.jewell@open.ac.uk>
-= AFFIRMATION: ijson-jcs, as of 2026-10-08
+= AFFIRMATION: ijson-jcs, as of 2026-10-07
 Jonathan D.A. Jewell <j.d.a.jewell@open.ac.uk>
 :toc: macro
 :toclevels: 2
 :icons: font
 :std-docs: https://github.com/hyperpolymath/standards/blob/main/docs
+:status: DRAFT — agent-authored, NOT affirmed by the owner
 
-_This file states what was true and checkable at one commit, and how it was
-checked._
+_This file states what was true and checkable at one commit, and how it was checked._
+
+[IMPORTANT]
+.Status: DRAFT. Not affirmed by the owner
+====
+An agent wrote and committed this file. The owner has not yet affirmed it. Until the owner
+re-anchors it and lands it with a signed `git commit -S`, treat every claim below as an
+agent report, not as the owner's affirmation.
+====
 
 [NOTE]
 ====
@@ -17,9 +25,7 @@ profile A (evidential) of the
 link:{std-docs}/AFFIRMATION-STANDARD.adoc[AFFIRMATION standard].
 
 This file is optional. Delete it rather than keep it unverified, because a
-stale affirmation is worse than none. The previous version, an agent-authored
-draft that the owner never affirmed, is kept at
-`docs/affirmations/AFFIRMATION-2026-10-07.adoc`.
+stale affirmation is worse than none.
 ====
 
 toc::[]
@@ -48,7 +54,7 @@ we say so rather than imply a green build.
 You may conclude that:
 
 * every claim below was produced by running the tool at the anchor commit, not
-  copied from memory, from a status document or from the previous affirmation.
+  copied from memory or from a status document.
 
 You may *not* conclude that:
 
@@ -71,23 +77,22 @@ Anyone may challenge any claim here with a counter-example or a failing run.
 | `main`
 
 | Commit (HEAD)
-| `38e81e24b036e5804f074af309d385ffc3f6691c`
+| `0fdeea716fd558e9807362acf6f8202d56d8d88f`
 
 | Permalink
-| https://github.com/hyperpolymath/ijson-jcs/tree/38e81e24b036e5804f074af309d385ffc3f6691c
+| https://github.com/hyperpolymath/ijson-jcs/tree/0fdeea716fd558e9807362acf6f8202d56d8d88f
 
 | Verified (UTC)
-| `2026-10-08T17:45:17Z` to `2026-10-08T17:45:44Z` (tests, fmt, clippy,
+| `2026-10-07T10:19:39Z` (tests), `2026-10-07T10:28:10Z` (fmt, clippy,
   CLI round-trip)
 
 | Working-tree delta at verification
-| `clean`. A fresh worktree at `origin/main`. `git status --short` was empty
-  before and after the runs; `target/` is build output and is ignored. The
-  control files were written outside the repo.
+| `clean`. A detached worktree at `origin/main`. `git status --short` was
+  empty; `target/` is build output and is ignored.
 
 | Toolchain
-| rustc 1.99.0 (`b940084d7`, 2026-09-28), cargo 1.99.0 (`5f94df478`,
-  2026-08-27), Rust edition 2024, on Debian 13 (WSL2, Linux 6.18.33.2).
+| rustc 1.99.0 (`b940084d7`, 2026-09-28), cargo 1.99.0, Rust edition 2024,
+  on Debian 13 (WSL2, Linux 6.18.33.2).
 |===
 
 [WARNING]
@@ -111,18 +116,10 @@ stale one.
 
 | GitHub description
 | Names I-JSON (RFC 7493), JCS (RFC 8785), the library, the
-  `check`/`fix`/`canon` CLI and ruling D306. Read live on 2026-10-08.
+  `check`/`fix`/`canon` CLI and ruling D306. Set on 2026-10-07.
 
 | GitHub topics
-| 13 topics, read live on 2026-10-08.
-
-| Downstream pin
-| `metadatastician/groove` `main` (`071d4ae`) depends on this exact commit:
-  `cli/Cargo.toml` line 20 is
-  `ijson-jcs = { git = "https://github.com/hyperpolymath/ijson-jcs", rev =
-  "38e81e24b036e5804f074af309d385ffc3f6691c" }`. groove derives its signed
-  manifest bytes from `ijson_jcs::to_jcs`, so a change here can change
-  groove's signatures.
+| 13 topics, set on 2026-10-07 (there were none before).
 |===
 
 == The honest state
@@ -170,9 +167,7 @@ stale one.
 | `ijson-jcs fix order.json; ijson-jcs check order.json`
 |===
 
-That is 52 tests in all, with 0 failures. The binary's `src/bin/ijson-jcs.rs`
-target holds no unit tests of its own (0 run); the CLI is covered by
-`tests/cli.rs`.
+That is 52 tests in all, with 0 failures.
 
 === The nuance you must not lose
 
@@ -180,20 +175,17 @@ target holds no unit tests of its own (0 run); the CLI is covered by
   `JsonMode::Canonical` rejects duplicate keys. `JsonMode::Loose` goes through
   `serde_json` and keeps the last duplicate *silently*. A caller that links
   the library and wants I-JSON must use Strict or Canonical, never Loose.
-* Before commit `0fdeea7`, `parse_json` had no strict path. Older checkouts
-  accept duplicate keys.
-* The only change between the previous anchor (`0fdeea7`) and this one is
-  `AFFIRMATION.adoc` itself. The code measured here is the same code.
+* Before commit `0fdeea7`, `parse_json` had no strict path. Older checkouts,
+  including the commit before `0fdeea7`, accept duplicate keys.
 * This file checks behaviour on a handful of controls. It does not claim
   conformance with every RFC 8785 number-serialisation case.
 
 [#outstanding]
 === Outstanding, weak or refuted
 
-* *No CI.* The repo has no `.github/` directory. The Actions API reports
-  0 workflow runs, and the anchor commit carries 0 check runs. Every result in
-  this file is local.
-* *No branch protection.* The effective rules on `main` are empty (`[]`).
+* *No CI.* The repo has no `.github/` directory, and the Actions API reports
+  0 workflow runs. No check runs at all exist on the anchor commit. Every result
+  in this file is local.
 * *README is Markdown.* The estate's documentation standard bans `README.md`
   in favour of `README.adoc`. There is no `EXPLAINME.adoc`.
 * *No `LICENSES/` directory and no `LICENSE` file.* The licence is declared
@@ -207,22 +199,21 @@ target holds no unit tests of its own (0 run); the CLI is covered by
 ----
 git clone https://github.com/hyperpolymath/ijson-jcs
 cd ijson-jcs
-git checkout 38e81e24b036e5804f074af309d385ffc3f6691c
+git checkout 0fdeea716fd558e9807362acf6f8202d56d8d88f
 cargo test --release                       # expect: 38 + 0 + 11 + 3 passed
 cargo fmt --check
 cargo clippy --release --all-targets -- -D warnings
-B=target/release/ijson-jcs
-printf '{"a":1,"b":2}' > ok.json;    $B check ok.json      # rc=0
-printf '{"b":2,"a":1}' > order.json; $B check order.json   # rc=1
-printf '{"a":1,"a":2}' > dup.json;   $B check dup.json     # rc=2
+printf '{"a":1,"b":2}' > ok.json;    target/release/ijson-jcs check ok.json     # rc=0
+printf '{"b":2,"a":1}' > order.json; target/release/ijson-jcs check order.json  # rc=1
+printf '{"a":1,"a":2}' > dup.json;   target/release/ijson-jcs check dup.json    # rc=2
 ----
 
 == One-line characterisation
 
-At `38e81e2`, ijson-jcs passes 52 tests, `fmt` and `clippy -D warnings`
+At `0fdeea7`, ijson-jcs passes 52 tests, `fmt` and `clippy -D warnings`
 locally. Its CLI separates canonical (rc 0), non-canonical (rc 1) and invalid
-(rc 2) JSON, including duplicate keys. groove pins this commit for its signed
-bytes. It has no CI, no AsciiDoc README and no licence file.
+(rc 2) JSON, including duplicate keys. It has no CI, no AsciiDoc README and no
+licence file.
 
 == Joint attestation
 
@@ -231,7 +222,7 @@ claim in this file is true and was checked as described. The open gaps are
 stated, not hidden.
 
 * *Engineering party (AI):* Claude Opus 5.5 (`claude-opus-5-5`) ran the checks
-  recorded here between `2026-10-08T17:45:17Z` and `2026-10-08T17:45:44Z`. It
+  recorded here between `2026-10-07T10:19:39Z` and `2026-10-07T10:28:10Z`. It
   stands behind the wording above as a faithful report of those runs.
 * *Owner / maintainer:* Jonathan D.A. Jewell <j.d.a.jewell@open.ac.uk> signs
   by committing this file with `-S`. The git commit signature over this
@@ -240,9 +231,7 @@ stated, not hidden.
 
 [source,bash]
 ----
-git commit -S -s AFFIRMATION.adoc \
-  docs/affirmations/AFFIRMATION-2026-10-07.adoc \
-  -m "docs: affirm state at 38e81e24b036e5804f074af309d385ffc3f6691c"
+git commit -S -s AFFIRMATION.adoc -m "docs: affirm state at 0fdeea716fd558e9807362acf6f8202d56d8d88f"
 git log --show-signature -1
 ----
 

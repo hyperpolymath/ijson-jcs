@@ -105,13 +105,19 @@ let canonical = parse_json(r#"{"b": 1, "a": 2}"#, JsonMode::Canonical)?;
 use ijson_jcs::{validate_i_json, is_valid_i_json_string};
 use serde_json::json;
 
-// Validate a parsed value
+// Validate a value you built, before emitting it
 let value = json!({"a": 1, "b": 2});
 assert!(validate_i_json(&value).is_ok());
 
-// Validate a string directly
+// Validate text directly
 assert!(is_valid_i_json_string(r#"{"a": 1}"#));
 ```
+
+`validate_i_json` checks a `Value` you built. Do not use it on a `Value`
+that `serde_json` parsed from text: by then a repeated key has collapsed to
+its last value, and an integer beyond the `i64`/`u64` range has become a
+float, so neither can be seen. For text, use `parse_json(…, JsonMode::Strict)`
+or `is_valid_i_json_string`, which read the text itself.
 
 ### JCS Canonicalization
 
@@ -203,7 +209,7 @@ ijson-jcs check $(git ls-files '*.canonical.json') || {
 
 - `parse_json(input: &str, mode: JsonMode) -> Result<Value, IJsonError>`
 - `parse_json_bytes(input: &[u8], mode: JsonMode) -> Result<Value, IJsonError>`
-- `validate_i_json(value: &Value) -> Result<(), ValidationError>`
+- `validate_i_json(value: &Value) -> Result<(), ValidationError>` (for a `Value` you built; for text, use `parse_json` with `Strict`)
 - `to_jcs(value: &Value) -> Result<Vec<u8>, CanonicalizationError>`
 - `to_jcs_string(value: &Value) -> Result<String, CanonicalizationError>`
 

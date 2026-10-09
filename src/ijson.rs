@@ -45,8 +45,30 @@ pub const SAFE_UINT_MAX: u64 = 9007199254740991; // 2^53 - 1
 
 /// Validate that a serde_json::Value is I-JSON compliant
 ///
-/// This function checks all I-JSON requirements and returns a detailed
-/// error for any violation found.
+/// This function checks the I-JSON requirements that a `Value` can still
+/// show, and returns a detailed error for any violation found.
+///
+/// # A built `Value`, not parsed text
+///
+/// Use this on a `Value` you built, before you emit or canonicalise it;
+/// [`to_jcs`](crate::to_jcs) calls it for that reason. Do not use it to
+/// validate text. A `Value` that `serde_json` parsed from text has already
+/// lost two things this check would need: a repeated key has collapsed to
+/// its last value, and an integer beyond the `i64`/`u64` range has become an
+/// `f64`. To validate text, use [`parse_json`](crate::parse_json) with
+/// [`JsonMode::Strict`](crate::JsonMode::Strict), which reads the text
+/// itself, or [`is_valid_i_json_string`](crate::is_valid_i_json_string).
+///
+/// ```rust
+/// use ijson_jcs::{parse_json, validate_i_json, JsonMode};
+///
+/// let text = r#"{"k": 1, "k": 2}"#;
+/// // serde_json keeps only the last "k", so the repeat is invisible here.
+/// let collapsed: serde_json::Value = serde_json::from_str(text).unwrap();
+/// assert!(validate_i_json(&collapsed).is_ok());
+/// // Parsing the text itself refuses it.
+/// assert!(parse_json(text, JsonMode::Strict).is_err());
+/// ```
 ///
 /// # Arguments
 /// * `value` - The JSON value to validate
@@ -352,6 +374,9 @@ pub fn validate_canonicalizable(value: &Value) -> Result<(), ValidationError> {
 }
 
 /// Check if a value is I-JSON compliant (non-failing version)
+///
+/// Same scope as [`validate_i_json`]: for a `Value` you built, not one that
+/// `serde_json` parsed from text.
 pub fn is_i_json(value: &Value) -> bool {
     validate_i_json(value).is_ok()
 }

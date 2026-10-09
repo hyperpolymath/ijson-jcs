@@ -254,8 +254,10 @@ mod tests {
         let text = "{\"a\": [ {}, [], \"x,]\" ,\n {\"k\": 1, \"m\": 18446744073709551616} ]}";
         let err = check_integer_tokens(text).unwrap_err();
         assert_eq!(err.path(), "a/3/m");
-        // A key with escapes is decoded only for the path.
-        let err = check_integer_tokens(r#"{"ab\"":[18446744073709551616]}"#).unwrap_err();
+        // A key with a unicode escape (for `b`) and an escaped quote is
+        // decoded only for the path.
+        let input = concat!(r#"{"a"#, "\x5Cu0062", r#"\"":[18446744073709551616]}"#);
+        let err = check_integer_tokens(input).unwrap_err();
         assert_eq!(err.path(), "ab\"/0");
         assert!(check_integer_tokens("{\"a\": [ {}, [], \"x,]\", {\"k\": 1}]}").is_ok());
     }

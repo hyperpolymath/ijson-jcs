@@ -126,12 +126,15 @@ pub(crate) fn from_str_no_duplicates(input: &str) -> Result<Value, serde_json::E
 }
 
 /// A container the integer-token scan is inside, kept to report a path.
-enum Frame {
+///
+/// A key is held as its raw literal, quotes and escapes included, and is
+/// decoded only if an error needs the path.
+enum Frame<'a> {
     /// An array, holding the index of the element being read.
     Array(usize),
     /// An object, holding the key of the member being read, or `None`
     /// while the next string is its key.
-    Object(Option<String>),
+    Object(Option<&'a str>),
 }
 
 /// Refuse an integer token outside the I-JSON safe range ±(2^53−1).
@@ -143,7 +146,7 @@ enum Frame {
 /// the same format.
 pub(crate) fn check_integer_tokens(input: &str) -> Result<(), ValidationError> {
     let bytes = input.as_bytes();
-    let mut stack: Vec<Frame> = Vec::new();
+    let mut stack: Vec<Frame<'_>> = Vec::new();
     let mut i = 0;
     while i < bytes.len() {
         match bytes[i] {
@@ -155,7 +158,7 @@ pub(crate) fn check_integer_tokens(input: &str) -> Result<(), ValidationError> {
                     i += if bytes[i] == b'\\' { 2 } else { 1 };
                 }
                 if let Some(Frame::Object(key @ None)) = stack.last_mut() {
-                    *key = Some(serde_json::from_str(&input[start..=i]).unwrap_or_default());
+                    *key = Some(&input[start..=i]);
                 }
             }
             b'-' | b'0'..=b'9' => {
@@ -198,12 +201,15 @@ fn is_safe_integer(token: &str) -> bool {
 
 /// The path of the value being scanned, `/`-joined as `validate_i_json`
 /// writes it (no leading `/`; the top-level value is the empty path).
-fn path_of(stack: &[Frame]) -> String {
+fn path_of(stack: &[Frame<'_>]) -> String {
     stack
         .iter()
         .map(|frame| match frame {
             Frame::Array(index) => index.to_string(),
-            Frame::Object(key) => json_pointer_encode(key.as_deref().unwrap_or_default()),
+            Frame::Object(raw) => {
+                let key: Option<String> = raw.and_then(|r| serde_json::from_str(r).ok());
+                json_pointer_encode(&key.unwrap_or_default())
+            }
         })
         .collect::<Vec<_>>()
         .join("/")
@@ -248,6 +254,9 @@ mod tests {
         let text = "{\"a\": [ {}, [], \"x,]\" ,\n {\"k\": 1, \"m\": 18446744073709551616} ]}";
         let err = check_integer_tokens(text).unwrap_err();
         assert_eq!(err.path(), "a/3/m");
+        // A key with escapes is decoded only for the path.
+        let err = check_integer_tokens(r#"{"ab\"":[18446744073709551616]}"#).unwrap_err();
+        assert_eq!(err.path(), "ab\"/0");
         assert!(check_integer_tokens("{\"a\": [ {}, [], \"x,]\", {\"k\": 1}]}").is_ok());
     }
 }

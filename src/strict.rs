@@ -9,12 +9,21 @@
 // the strict parse modes go through this deserializer instead, which builds
 // the same `Value` but fails as soon as a key repeats within one object.
 //
-// Everything else (number range, lone-surrogate escapes, UTF-8, trailing
+// The same holds for an integer token beyond the `i64`/`u64` range:
+// serde_json reads it as a double, so the `Value` holds a float and the
+// integer it came from is gone. `check_integer_tokens` therefore reads the
+// raw text after the parse and refuses any integer token outside
+// ±(2^53−1).
+//
+// Everything else (double range, lone-surrogate escapes, UTF-8, trailing
 // characters) is still enforced by serde_json's own tokenizer.
 
 use serde::de::{self, Deserialize, Deserializer, MapAccess, SeqAccess, Visitor};
 use serde_json::{Map, Number, Value};
 use std::fmt;
+
+use crate::error::ValidationError;
+use crate::ijson::{SAFE_UINT_MAX, json_pointer_encode};
 
 /// A `serde_json::Value` that was deserialized with duplicate keys rejected.
 struct StrictValue(Value);
@@ -116,6 +125,90 @@ pub(crate) fn from_str_no_duplicates(input: &str) -> Result<Value, serde_json::E
     Ok(value)
 }
 
+/// A container the integer-token scan is inside, kept to report a path.
+enum Frame {
+    /// An array, holding the index of the element being read.
+    Array(usize),
+    /// An object, holding the key of the member being read, or `None`
+    /// while the next string is its key.
+    Object(Option<String>),
+}
+
+/// Refuse an integer token outside the I-JSON safe range ±(2^53−1).
+///
+/// `input` must already have parsed as JSON. Digits inside a string are
+/// not a token. A token with `.`, `e` or `E` is a float and is accepted, as
+/// `validate_i_json` accepts floats. The error is the `UnsafeInteger` that
+/// `validate_i_json` reports, with the token as written and its path in
+/// the same format.
+pub(crate) fn check_integer_tokens(input: &str) -> Result<(), ValidationError> {
+    let bytes = input.as_bytes();
+    let mut stack: Vec<Frame> = Vec::new();
+    let mut i = 0;
+    while i < bytes.len() {
+        match bytes[i] {
+            b'"' => {
+                // Valid JSON: an escape is `\` plus one byte that is never `"`.
+                let start = i;
+                i += 1;
+                while bytes[i] != b'"' {
+                    i += if bytes[i] == b'\\' { 2 } else { 1 };
+                }
+                if let Some(Frame::Object(key @ None)) = stack.last_mut() {
+                    *key = Some(serde_json::from_str(&input[start..=i]).unwrap_or_default());
+                }
+            }
+            b'-' | b'0'..=b'9' => {
+                let start = i;
+                while i + 1 < bytes.len()
+                    && matches!(bytes[i + 1], b'0'..=b'9' | b'-' | b'+' | b'.' | b'e' | b'E')
+                {
+                    i += 1;
+                }
+                let token = &input[start..=i];
+                if !token.contains(['.', 'e', 'E']) && !is_safe_integer(token) {
+                    return Err(ValidationError::UnsafeInteger {
+                        value: token.to_string(),
+                        path: path_of(&stack),
+                    });
+                }
+            }
+            b'[' => stack.push(Frame::Array(0)),
+            b'{' => stack.push(Frame::Object(None)),
+            b']' | b'}' => {
+                stack.pop();
+            }
+            b',' => match stack.last_mut() {
+                Some(Frame::Array(index)) => *index += 1,
+                Some(Frame::Object(key)) => *key = None,
+                None => {}
+            },
+            _ => {}
+        }
+        i += 1;
+    }
+    Ok(())
+}
+
+/// Whether a JSON integer token lies within ±(2^53−1).
+fn is_safe_integer(token: &str) -> bool {
+    let magnitude = token.strip_prefix('-').unwrap_or(token);
+    magnitude.parse::<u64>().is_ok_and(|m| m <= SAFE_UINT_MAX)
+}
+
+/// The path of the value being scanned, `/`-joined as `validate_i_json`
+/// writes it (no leading `/`; the top-level value is the empty path).
+fn path_of(stack: &[Frame]) -> String {
+    stack
+        .iter()
+        .map(|frame| match frame {
+            Frame::Array(index) => index.to_string(),
+            Frame::Object(key) => json_pointer_encode(key.as_deref().unwrap_or_default()),
+        })
+        .collect::<Vec<_>>()
+        .join("/")
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -146,5 +239,15 @@ mod tests {
     #[test]
     fn trailing_garbage_rejected() {
         assert!(from_str_no_duplicates("{} x").is_err());
+    }
+
+    /// The token scan skips strings and tracks keys and indices across
+    /// siblings, whitespace and nesting.
+    #[test]
+    fn integer_token_path_follows_keys_and_indices() {
+        let text = "{\"a\": [ {}, [], \"x,]\" ,\n {\"k\": 1, \"m\": 18446744073709551616} ]}";
+        let err = check_integer_tokens(text).unwrap_err();
+        assert_eq!(err.path(), "a/3/m");
+        assert!(check_integer_tokens("{\"a\": [ {}, [], \"x,]\", {\"k\": 1}]}").is_ok());
     }
 }

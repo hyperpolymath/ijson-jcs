@@ -115,6 +115,12 @@ pub use serde_json::Value;
 /// In `Strict` and `Canonical` modes an object with a repeated key is
 /// rejected (RFC 7493 §2.3) during parsing, since a parsed `Value` can no
 /// longer show that a duplicate existed.
+///
+/// For the same reason those modes check integer tokens in the text itself:
+/// an integer beyond the `i64`/`u64` range reaches the `Value` as a float,
+/// so a token outside ±(2^53−1) such as `18446744073709551616` is an
+/// `UnsafeInteger` error read from `input`, not from the `Value`. Float
+/// tokens (`1.5`, `1e30`) are accepted.
 pub fn parse_json(input: &str, mode: JsonMode) -> Result<Value, IJsonError> {
     let parsed = match mode {
         JsonMode::Loose => serde_json::from_str(input),
@@ -126,10 +132,12 @@ pub fn parse_json(input: &str, mode: JsonMode) -> Result<Value, IJsonError> {
         JsonMode::Loose => Ok(value),
         JsonMode::Strict => {
             ijson::validate_i_json(&value)?;
+            strict::check_integer_tokens(input)?;
             Ok(value)
         }
         JsonMode::Canonical => {
             ijson::validate_i_json(&value)?;
+            strict::check_integer_tokens(input)?;
             jcs::validate_canonicalizable(&value)?;
             Ok(value)
         }
@@ -194,6 +202,80 @@ mod tests {
 
         assert!(is_valid_i_json_bytes(b"{\"a\": 1}"));
         assert!(!is_valid_i_json_bytes(b"{\"k\":1,\"k\":2}"));
+    }
+
+    /// Strict and Canonical refuse an integer token beyond `u64`/`i64`, at
+    /// top level and nested, naming the token and its path; Loose accepts it.
+    #[test]
+    fn test_over_range_integer_tokens_refused() {
+        for (input, token, path) in [
+            ("18446744073709551616", "18446744073709551616", ""),
+            ("[18446744073709551617]", "18446744073709551617", "0"),
+            ("[-9223372036854775809]", "-9223372036854775809", "0"),
+            (
+                r#"{"ttl":18446744073709551616}"#,
+                "18446744073709551616",
+                "ttl",
+            ),
+            (
+                r#"{"a":[1,{"b":[2,-99999999999999999999999]}]}"#,
+                "-99999999999999999999999",
+                "a/1/b/1",
+            ),
+        ] {
+            let want = ValidationError::UnsafeInteger {
+                value: token.to_string(),
+                path: path.to_string(),
+            };
+            for mode in [JsonMode::Strict, JsonMode::Canonical] {
+                let err = parse_json(input, mode).unwrap_err();
+                assert_eq!(err.as_validation_error(), Some(&want), "{mode}: {input}");
+                let err = parse_json_bytes(input.as_bytes(), mode).unwrap_err();
+                assert_eq!(err.as_validation_error(), Some(&want), "{mode}: {input}");
+            }
+            assert!(parse_json(input, JsonMode::Loose).is_ok(), "Loose: {input}");
+        }
+        assert!(!is_valid_i_json_string(r#"{"ttl":18446744073709551616}"#));
+        assert!(!is_valid_i_json_bytes(b"[18446744073709551616]"));
+    }
+
+    /// The token check reports the same path as `validate_i_json` reports
+    /// for an unsafe integer at the same place.
+    #[test]
+    fn test_over_range_path_matches_validate_i_json() {
+        let path = |n: &str| {
+            let input = format!(r#"{{"a":[1,{{"b~/c":[2,{n}]}}]}}"#);
+            let err = parse_json(&input, JsonMode::Strict).unwrap_err();
+            err.as_validation_error().unwrap().path().to_string()
+        };
+        // 2^53 + 1 fits a u64, so `validate_i_json` refuses it from the Value.
+        assert_eq!(path("9007199254740993"), "a/1/b~0~1c/1");
+        assert_eq!(path("18446744073709551616"), "a/1/b~0~1c/1");
+    }
+
+    /// Safe-range integers, float tokens and over-range digits inside
+    /// strings are accepted, with the same `Value` Loose parsing gives.
+    #[test]
+    fn test_integer_token_check_accepts() {
+        for input in [
+            "9007199254740991",
+            "-9007199254740991",
+            "[1e30,1.5,-0.0,-0,0,1e+20,2E-3]",
+            // A float token is exempt like every float, whatever its value.
+            "[18446744073709551616.0]",
+            r#"{"s":"18446744073709551616"}"#,
+            r#"{"s":"a\"18446744073709551616","18446744073709551617":"\\"}"#,
+            r#"{"\\\"":[-9007199254740991],"t":true,"f":false,"n":null}"#,
+        ] {
+            let loose = parse_json(input, JsonMode::Loose).unwrap();
+            for mode in [JsonMode::Strict, JsonMode::Canonical] {
+                assert_eq!(
+                    parse_json(input, mode).ok(),
+                    Some(loose.clone()),
+                    "{mode}: {input}"
+                );
+            }
+        }
     }
 
     #[test]

@@ -337,7 +337,7 @@ fn value_type_name(value: &Value) -> String {
 }
 
 /// JSON Pointer encoding for a key (RFC 6901)
-fn json_pointer_encode(key: &str) -> String {
+pub(crate) fn json_pointer_encode(key: &str) -> String {
     key.replace('~', "~0").replace('/', "~1")
 }
 

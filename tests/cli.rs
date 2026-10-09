@@ -107,13 +107,14 @@ fn keys_sorted_by_utf16_code_units_including_non_bmp() {
 #[test]
 fn canon_rejects_invalid_input_with_exit_2() {
     for bad in [
-        &br#"{"a":1,"a":2}"#[..], // duplicate key
-        br#"["\ud800"]"#,         // lone surrogate
-        br#"[1e400]"#,            // outside double range
-        br#"[9007199254740993]"#, // integer outside +/-(2^53-1)
-        b"[\"\xff\"]",            // invalid UTF-8
-        br#"{"a":1} trailing"#,   // trailing garbage
-        br#"["\uffff"]"#,         // noncharacter
+        &br#"{"a":1,"a":2}"#[..],     // duplicate key
+        br#"["\ud800"]"#,             // lone surrogate
+        br#"[1e400]"#,                // outside double range
+        br#"[9007199254740993]"#,     // integer outside +/-(2^53-1)
+        br#"[18446744073709551616]"#, // integer beyond u64, read by serde as a float
+        b"[\"\xff\"]",                // invalid UTF-8
+        br#"{"a":1} trailing"#,       // trailing garbage
+        br#"["\uffff"]"#,             // noncharacter
     ] {
         let out = canon(bad);
         assert_eq!(

@@ -1,0 +1,54 @@
+# SPDX-License-Identifier: MPL-2.0
+# KYAML content; GitHub requires the .yml extension.
+{
+  name: "CI",
+  on: {
+    pull_request: {},
+    push: {
+      branches: [
+        "main",
+        "arena/d216802e-ijson-jcs",
+      ],
+    },
+    merge_group: {},
+    workflow_dispatch: {},
+  },
+  permissions: {
+    contents: "read",
+  },
+  concurrency: {
+    group: "${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}",
+    cancel-in-progress: true,
+  },
+  jobs: {
+    rust: {
+      name: "Rust",
+      runs-on: "ubuntu-24.04",
+      timeout-minutes: 15,
+      steps: [
+        {
+          uses: "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1", # v7.0.1
+          with: {
+            persist-credentials: false,
+          },
+        },
+        {
+          name: "Install pinned Rust toolchain",
+          run: "rustup show active-toolchain",
+        },
+        {
+          name: "Test library, CLI and documentation",
+          run: "bash scripts/ci/run.sh tests cargo test --locked --all-features",
+        },
+        {
+          name: "Formatting",
+          run: "bash scripts/ci/run.sh format cargo fmt --all -- --check",
+        },
+        {
+          name: "Clippy",
+          run: "bash scripts/ci/run.sh clippy cargo clippy --locked --all-targets --all-features -- -D warnings",
+        },
+      ],
+    },
+  },
+}

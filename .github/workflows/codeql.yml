@@ -61,7 +61,10 @@
         },
         {
           name: "Gate actual SARIF findings",
-          run: "bash scripts/ci/run.sh codeql bash scripts/ci/codeql-report.sh",
+          run: "bash scripts/ci/run.sh codeql bash scripts/ci/codeql-report.sh \"$LANGUAGE\"",
+          env: {
+            LANGUAGE: "${{ matrix.language }}",
+          },
         },
         {
           name: "Canonical execution receipts",

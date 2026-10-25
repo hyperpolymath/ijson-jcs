@@ -60,7 +60,8 @@ missing-required-check board controls. It never applies an automatic bypass.
 llvm-cov instrumentation, tests and an 85% line-coverage floor. Coverage is not
 path/branch correctness; inline unit-test code can contribute to line coverage.
 | CodeQL | Actual Rust and Actions queries with an explicit SARIF output and
-processing wait. Nonempty rule metadata, calibrated high-severity/error-result
+processing wait. Nonempty driver/extension rule metadata, successful analyzer invocations,
+nonzero Rust extraction metrics and calibrated high-severity/error-result
 gates and canonical reports; not simply the analyzer process's exit code.
 | Secrets | Digest-pinned Gitleaks, clean/firing controls, full Git history and
 working-tree scans. Comment/AsciiDoc control included. Reports are redacted;
@@ -219,7 +220,8 @@ kyq port; then execute the real shared-vector integration and automatic update
 proposal. Preserve archived signed bytes; version canonical-byte migrations.
 . Collect real main benchmark history and retain accepted receipts durably.
 
-The release-environment endpoint returned 404 (no readable configuration).
+The release-environment endpoint returned 404 (no readable configuration);
+mirror-variable discovery returned 403, so configured targets cannot be inferred.
 The repository-protection/Actions-setting endpoints returned 403 to this
 session; an empty ruleset listing is not proof of absent protection. PR #8 was
 merged externally while checks/review were failing. This agent did not merge

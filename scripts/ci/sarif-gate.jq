@@ -1,13 +1,18 @@
 # SPDX-License-Identifier: MPL-2.0
-# Consume CodeQL's actual rules/results, not just its process exit status.
+# CodeQL emits query packs under tool.extensions; older reports use driver.rules.
+def rules: (.tool.driver.rules // []) + [.tool.extensions[]?.rules[]?];
 .version == "2.1.0" and (.runs | type == "array" and length > 0) and
 all(.runs[];
+  rules as $definitions |
   .tool.driver.name == "CodeQL" and
-  (.tool.driver.rules | type == "array" and length > 0) and
+  ($definitions | length > 0) and
+  ($definitions | map(.id) | unique | length) == ($definitions | length) and
+  (.invocations | type == "array" and length > 0) and
+  all(.invocations[]; .executionSuccessful == true) and
   (.results | type == "array") and
-  (.tool.driver.rules | map({key:.id,value:.}) | from_entries) as $rules |
+  ($definitions | map({key:.id,value:.}) | from_entries) as $rules |
   all(.results[];
-    $rules[.ruleId] as $rule |
+    $rules[.ruleId // .rule.id] as $rule |
     if $rule == null then error("result has no matching rule metadata")
     else
       ($rule.properties."security-severity" // "0" | tonumber) as $severity |

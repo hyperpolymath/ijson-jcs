@@ -4,6 +4,7 @@
 set -euo pipefail
 label=${1:?usage: run.sh LABEL COMMAND...}
 shift
+(( $# > 0 )) || { echo 'usage: run.sh LABEL COMMAND...' >&2; exit 2; }
 [[ "$label" =~ ^[a-z0-9_-]+$ ]] || { echo 'invalid log label' >&2; exit 2; }
 mkdir -p target/ci
 status=0

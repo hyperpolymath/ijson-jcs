@@ -6,6 +6,6 @@ cargo generate-lockfile
 cargo fmt --all
 payload=$(git diff -- Cargo.lock src tests benches examples | base64 -w0)
 # Keep notices under Checks' per-annotation size limit.
-for (( offset=0; offset<${#payload}; offset+=50000 )); do
-  printf '::notice title=bootstrap-%06d::%s\n' "$offset" "${payload:offset:50000}"
+for (( offset=0; offset<${#payload}; offset+=3000 )); do
+  printf '::notice title=bootstrap-%06d::%s\n' "$offset" "${payload:offset:3000}"
 done

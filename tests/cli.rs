@@ -266,9 +266,21 @@ fn help_and_usage_errors() {
 /// A filename after -- is never interpreted as help/version/an option.
 #[test]
 fn option_terminator_protects_all_filenames() {
-    for name in ["--help", "-h", "--version", "-V", "--max-bytes", "--", "with spaces.json"] {
+    for name in [
+        "--help",
+        "-h",
+        "--version",
+        "-V",
+        "--max-bytes",
+        "--",
+        "with spaces.json",
+    ] {
         let path = temp_file(name, br#"{"b":1,"a":2}"#);
-        let out = bin().current_dir(path.parent().unwrap()).args(["fix", "--", name]).output().unwrap();
+        let out = bin()
+            .current_dir(path.parent().unwrap())
+            .args(["fix", "--", name])
+            .output()
+            .unwrap();
         assert_eq!(out.status.code(), Some(0), "{name}: {out:?}");
         assert_eq!(fs::read(&path).unwrap(), b"{\"a\":2,\"b\":1}\n");
         assert!(String::from_utf8(out.stdout).unwrap().starts_with("FIXED "));
@@ -281,7 +293,11 @@ fn fix_refuses_to_install_output_outside_the_strict_token_profile() {
     let out = run_on("fix", &[&path]);
     assert_eq!(out.status.code(), Some(2));
     assert_eq!(fs::read(path).unwrap(), b"1e20");
-    assert!(String::from_utf8(out.stdout).unwrap().contains("canonical output violates"));
+    assert!(
+        String::from_utf8(out.stdout)
+            .unwrap()
+            .contains("canonical output violates")
+    );
     assert_eq!(canon_ok("1e20"), "100000000000000000000");
 }
 
@@ -289,16 +305,38 @@ fn fix_refuses_to_install_output_outside_the_strict_token_profile() {
 fn input_limits_are_enforced_at_the_boundary() {
     let path = temp_file("limit.json", b"null");
     for (limit, want) in [("3", 2), ("4", 0), ("5", 0)] {
-        let out = bin().args(["check", "--max-bytes", limit]).arg(&path).output().unwrap();
+        let out = bin()
+            .args(["check", "--max-bytes", limit])
+            .arg(&path)
+            .output()
+            .unwrap();
         assert_eq!(out.status.code(), Some(want), "{out:?}");
     }
-    let out = bin().args(["fix", "--max-bytes", "3"]).arg(&path).output().unwrap();
+    let out = bin()
+        .args(["fix", "--max-bytes", "3"])
+        .arg(&path)
+        .output()
+        .unwrap();
     assert_eq!(out.status.code(), Some(2));
     assert_eq!(fs::read(&path).unwrap(), b"null");
     for limit in ["0", "-1", "no", "18446744073709551615"] {
-        assert_eq!(bin().args(["canon", "--max-bytes", limit]).output().unwrap().status.code(), Some(2));
+        assert_eq!(
+            bin()
+                .args(["canon", "--max-bytes", limit])
+                .output()
+                .unwrap()
+                .status
+                .code(),
+            Some(2)
+        );
     }
-    let mut child = bin().args(["canon", "--max-bytes", "3"]).stdin(Stdio::piped()).stdout(Stdio::piped()).stderr(Stdio::piped()).spawn().unwrap();
+    let mut child = bin()
+        .args(["canon", "--max-bytes", "3"])
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .unwrap();
     child.stdin.take().unwrap().write_all(b"null").unwrap();
     let out = child.wait_with_output().unwrap();
     assert_eq!(out.status.code(), Some(2));
@@ -321,7 +359,10 @@ fn atomic_fix_preserves_permissions_and_leaves_no_temporary_file() {
     let path = temp_file("mode.json", b"{\"b\":2,\"a\":1}");
     fs::set_permissions(&path, fs::Permissions::from_mode(0o640)).unwrap();
     assert_eq!(run_on("fix", &[&path]).status.code(), Some(0));
-    assert_eq!(fs::metadata(&path).unwrap().permissions().mode() & 0o777, 0o640);
+    assert_eq!(
+        fs::metadata(&path).unwrap().permissions().mode() & 0o777,
+        0o640
+    );
     assert_eq!(fs::read_dir(path.parent().unwrap()).unwrap().count(), 1);
     let before = fs::metadata(&path).unwrap().modified().unwrap();
     assert_eq!(run_on("fix", &[&path]).status.code(), Some(0));
@@ -337,7 +378,12 @@ fn fix_refuses_links_and_read_only_files_without_mutating_targets() {
     let link = path.with_file_name("symlink.json");
     symlink(&path, &link).unwrap();
     assert_eq!(run_on("fix", &[&link]).status.code(), Some(2));
-    assert!(fs::symlink_metadata(&link).unwrap().file_type().is_symlink());
+    assert!(
+        fs::symlink_metadata(&link)
+            .unwrap()
+            .file_type()
+            .is_symlink()
+    );
     assert_eq!(fs::read(&path).unwrap(), original);
     let hardlink = path.with_file_name("hardlink.json");
     fs::hard_link(&path, &hardlink).unwrap();
@@ -364,7 +410,10 @@ fn non_utf8_filenames_are_processed_without_panicking() {
 #[test]
 fn stdout_write_failures_are_exit_two_not_panics() {
     for args in [&["--help"][..], &["--version"]] {
-        let full = fs::OpenOptions::new().write(true).open("/dev/full").unwrap();
+        let full = fs::OpenOptions::new()
+            .write(true)
+            .open("/dev/full")
+            .unwrap();
         let out = bin().args(args).stdout(Stdio::from(full)).output().unwrap();
         assert_eq!(out.status.code(), Some(2));
         let error = String::from_utf8(out.stderr).unwrap();

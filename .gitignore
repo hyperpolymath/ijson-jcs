@@ -18,3 +18,12 @@ Thumbs.db
 # Local configuration
 .env
 .env.local
+
+# Verification artifacts and ephemeral tool checkouts (never evidence in Git)
+.cache/
+.tools/
+mutants.out/
+mutants.out.old/
+/fuzz/target/
+/fuzz/artifacts/
+/fuzz/coverage/

@@ -3,7 +3,10 @@
 
 mod fixtures;
 
-use ijson_jcs::{JsonMode, MAX_DEPTH, ValidationError, Value, parse_json, parse_json_bytes, to_jcs, validate_i_json};
+use ijson_jcs::{
+    JsonMode, MAX_DEPTH, ValidationError, Value, parse_json, parse_json_bytes, to_jcs,
+    validate_i_json,
+};
 use serde_json::json;
 
 #[test]
@@ -11,10 +14,15 @@ fn clean_fault_pairs_have_the_expected_diagnosis() {
     assert!(!fixtures::PAIRS.is_empty());
     for pair in fixtures::PAIRS {
         for mode in [JsonMode::Strict, JsonMode::Canonical] {
-            let clean = parse_json_bytes(pair.clean, mode).unwrap_or_else(|e| panic!("harness fired on {}: {e}", pair.class));
+            let clean = parse_json_bytes(pair.clean, mode)
+                .unwrap_or_else(|e| panic!("harness fired on {}: {e}", pair.class));
             assert!(to_jcs(&clean).is_ok(), "{}", pair.class);
             let failure = parse_json_bytes(pair.fault, mode).expect_err(pair.class);
-            assert!(failure.to_string().contains(pair.diagnostic), "{} was misclassified: {failure}", pair.class);
+            assert!(
+                failure.to_string().contains(pair.diagnostic),
+                "{} was misclassified: {failure}",
+                pair.class
+            );
         }
     }
 }
@@ -39,7 +47,10 @@ fn constructed_values_are_depth_bounded_before_serialization() {
     assert!(validate_i_json(&value).is_ok());
     assert!(to_jcs(&value).is_ok());
     value = Value::Array(vec![value]);
-    assert!(matches!(validate_i_json(&value), Err(ValidationError::NestingTooDeep { .. })));
+    assert!(matches!(
+        validate_i_json(&value),
+        Err(ValidationError::NestingTooDeep { .. })
+    ));
     assert!(to_jcs(&value).is_err());
 }
 

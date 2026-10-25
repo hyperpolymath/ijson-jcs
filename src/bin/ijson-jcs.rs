@@ -64,7 +64,9 @@ fn read_bounded(reader: impl Read, limit: u64) -> io::Result<Vec<u8>> {
     let mut bytes = Vec::new();
     reader.take(limit + 1).read_to_end(&mut bytes)?;
     if bytes.len() as u64 > limit {
-        return Err(io::Error::other(format!("input exceeds --max-bytes {limit}")));
+        return Err(io::Error::other(format!(
+            "input exceeds --max-bytes {limit}"
+        )));
     }
     Ok(bytes)
 }
@@ -94,7 +96,10 @@ impl Drop for PendingFile {
 /// Ownership, ACLs and extended attributes are not copied; permission bits are.
 fn atomic_replace(path: &Path, bytes: &[u8], permissions: fs::Permissions) -> io::Result<()> {
     static NEXT: AtomicU64 = AtomicU64::new(0);
-    let parent = path.parent().filter(|p| !p.as_os_str().is_empty()).unwrap_or(Path::new("."));
+    let parent = path
+        .parent()
+        .filter(|p| !p.as_os_str().is_empty())
+        .unwrap_or(Path::new("."));
     for _ in 0..128 {
         let temp = parent.join(format!(
             ".ijson-jcs.{}.{}.tmp",
@@ -128,7 +133,9 @@ fn atomic_replace(path: &Path, bytes: &[u8], permissions: fs::Permissions) -> io
 fn fix_permissions(path: &Path) -> io::Result<fs::Permissions> {
     let metadata = fs::symlink_metadata(path)?;
     if !metadata.is_file() {
-        return Err(io::Error::other("fix requires a regular file, not a symlink or device"));
+        return Err(io::Error::other(
+            "fix requires a regular file, not a symlink or device",
+        ));
     }
     if metadata.permissions().readonly() {
         return Err(io::Error::other("fix refuses a read-only file"));
@@ -173,7 +180,8 @@ fn files_command(files: &[PathBuf], fix: bool, limit: u64, out: &mut impl Write)
                 return Ok("OK");
             }
             if let Some(permissions) = permissions {
-                atomic_replace(path, &wanted, permissions).map_err(|e| format!("cannot replace: {e}"))?;
+                atomic_replace(path, &wanted, permissions)
+                    .map_err(|e| format!("cannot replace: {e}"))?;
             }
             Ok("FIXED")
         })();
@@ -215,12 +223,23 @@ fn run(args: &[OsString], out: &mut impl Write) -> io::Result<u8> {
             writeln!(out, "ijson-jcs {}", env!("CARGO_PKG_VERSION"))?;
             return Ok(EXIT_OK);
         } else if options && arg == "--max-bytes" {
-            match args.next().and_then(|v| v.to_str()).and_then(|v| v.parse::<u64>().ok()) {
+            match args
+                .next()
+                .and_then(|v| v.to_str())
+                .and_then(|v| v.parse::<u64>().ok())
+            {
                 Some(n) if n > 0 && n < usize::MAX as u64 => limit = n,
-                _ => return Ok(usage_error("--max-bytes needs a positive, addressable byte count")),
+                _ => {
+                    return Ok(usage_error(
+                        "--max-bytes needs a positive, addressable byte count",
+                    ));
+                }
             }
         } else if options && arg.to_string_lossy().starts_with('-') && arg != "-" {
-            return Ok(usage_error(&format!("unknown option '{}'", arg.to_string_lossy())));
+            return Ok(usage_error(&format!(
+                "unknown option '{}'",
+                arg.to_string_lossy()
+            )));
         } else {
             positional.push(arg);
         }
@@ -230,19 +249,34 @@ fn run(args: &[OsString], out: &mut impl Write) -> io::Result<u8> {
     };
     let files: Vec<PathBuf> = files.iter().map(|path| PathBuf::from(*path)).collect();
     match command.to_str() {
-        Some("check" | "fix") if files.is_empty() => Ok(usage_error("check/fix needs at least one FILE")),
-        Some("check" | "fix") => files_command(&files, command.as_os_str() == OsStr::new("fix"), limit, out),
-        Some("canon") if !files.is_empty() => Ok(usage_error("'canon' reads stdin and takes no FILE")),
+        Some("check" | "fix") if files.is_empty() => {
+            Ok(usage_error("check/fix needs at least one FILE"))
+        }
+        Some("check" | "fix") => {
+            files_command(&files, command.as_os_str() == OsStr::new("fix"), limit, out)
+        }
+        Some("canon") if !files.is_empty() => {
+            Ok(usage_error("'canon' reads stdin and takes no FILE"))
+        }
         Some("canon") => {
             let result = read_bounded(io::stdin().lock(), limit)
                 .map_err(|e| format!("cannot read: {e}"))
                 .and_then(|bytes| canonical_form(&bytes));
             match result {
-                Ok(bytes) => { out.write_all(&bytes)?; Ok(EXIT_OK) }
-                Err(reason) => { eprintln!("INVALID <stdin>: {reason}"); Ok(EXIT_INVALID) }
+                Ok(bytes) => {
+                    out.write_all(&bytes)?;
+                    Ok(EXIT_OK)
+                }
+                Err(reason) => {
+                    eprintln!("INVALID <stdin>: {reason}");
+                    Ok(EXIT_INVALID)
+                }
             }
         }
-        _ => Ok(usage_error(&format!("unknown command '{}'", command.to_string_lossy()))),
+        _ => Ok(usage_error(&format!(
+            "unknown command '{}'",
+            command.to_string_lossy()
+        ))),
     }
 }
 

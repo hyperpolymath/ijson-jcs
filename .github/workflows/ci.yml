@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: MPL-2.0
-# KYAML content; GitHub requires the .yml extension.
+# KYAML content; retain the filename required by GitHub.
 {
   name: "CI",
   on: {
@@ -12,6 +12,7 @@
     },
     merge_group: {},
     workflow_dispatch: {},
+    workflow_call: {},
   },
   permissions: {
     contents: "read",
@@ -20,11 +21,20 @@
     group: "${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}",
     cancel-in-progress: true,
   },
+  defaults: {
+    run: {
+      shell: "bash",
+    },
+  },
+  env: {
+    CARGO_TERM_COLOR: "never",
+    RUST_BACKTRACE: "1",
+  },
   jobs: {
-    rust: {
-      name: "Rust",
+    quality: {
+      name: "Quality and workflow policy",
       runs-on: "ubuntu-24.04",
-      timeout-minutes: 15,
+      timeout-minutes: 25,
       steps: [
         {
           uses: "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1", # v7.0.1
@@ -33,24 +43,494 @@
           },
         },
         {
-          name: "Install pinned Rust toolchain",
+          name: "Pinned Rust",
           run: "rustup show active-toolchain",
         },
         {
-          name: "Bootstrap registry lock and formatting",
+          uses: "actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9", # v6.1.0
+          with: {
+            path: "~/.cargo/registry\n~/.cargo/git\ntarget",
+            key: "rust-${{ runner.os }}-${{ github.job }}-${{ matrix.toolchain || '1.99.1' }}-${{ hashFiles('Cargo.lock', 'rust-toolchain.toml', '.ci/pins.sh') }}",
+          },
+        },
+        {
+          name: "Fresh evidence directory",
+          run: "rm -rf target/ci && mkdir -p target/ci",
+        },
+        {
+          name: "Install verified YAML tools",
+          run: "bash scripts/ci/provision.sh yaml",
+          env: {
+            GH_TOKEN: "${{ github.token }}",
+          },
+        },
+        {
+          name: "Apply bootstrap lock/formatter feedback",
           run: "bash scripts/ci/run.sh bootstrap bash scripts/ci/bootstrap.sh",
         },
         {
-          name: "Test library, CLI and documentation",
-          run: "bash scripts/ci/run.sh tests cargo test --locked --all-features",
-        },
-        {
-          name: "Formatting",
+          name: "Rust formatting",
           run: "bash scripts/ci/run.sh format cargo fmt --all -- --check",
         },
         {
           name: "Clippy",
           run: "bash scripts/ci/run.sh clippy cargo clippy --locked --all-targets --all-features -- -D warnings",
+        },
+        {
+          name: "CI wrapper calibration",
+          run: "bash scripts/ci/run.sh wrapper-controls bash scripts/tests/ci-run.sh",
+        },
+        {
+          name: "Workflow structure and KYAML",
+          run: "bash scripts/ci/run.sh workflow-policy bash scripts/ci/policy.sh",
+        },
+        {
+          name: "Package verification",
+          run: "bash scripts/ci/run.sh package cargo package --locked --allow-dirty",
+        },
+        {
+          name: "Canonical execution receipts",
+          run: "bash scripts/ci/finalize-evidence.sh",
+          if: "${{ always() }}",
+        },
+        {
+          name: "Retain execution evidence",
+          if: "${{ always() }}",
+          uses: "actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f", # v6.0.0
+          with: {
+            name: "evidence-${{ github.job }}-${{ matrix.os || runner.os }}-${{ matrix.toolchain || 'pinned' }}",
+            path: "target/ci/",
+            if-no-files-found: "error",
+            retention-days: 30,
+          },
+        },
+      ],
+    },
+    test: {
+      name: "Rust (${{ matrix.os }}, ${{ matrix.toolchain }})",
+      runs-on: "${{ matrix.os }}",
+      timeout-minutes: 20,
+      strategy: {
+        fail-fast: false,
+        matrix: {
+          include: [
+            {
+              os: "ubuntu-24.04",
+              toolchain: "1.85.0",
+            },
+            {
+              os: "ubuntu-24.04",
+              toolchain: "1.99.1",
+            },
+            {
+              os: "windows-2025",
+              toolchain: "1.99.1",
+            },
+            {
+              os: "macos-15",
+              toolchain: "1.99.1",
+            },
+          ],
+        },
+      },
+      env: {
+        RUSTUP_TOOLCHAIN: "${{ matrix.toolchain }}",
+      },
+      steps: [
+        {
+          uses: "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1", # v7.0.1
+          with: {
+            persist-credentials: false,
+          },
+        },
+        {
+          name: "Install exact toolchain",
+          run: "rustup toolchain install \"$RUSTUP_TOOLCHAIN\" --profile minimal",
+        },
+        {
+          uses: "actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9", # v6.1.0
+          with: {
+            path: "~/.cargo/registry\n~/.cargo/git\ntarget",
+            key: "rust-${{ runner.os }}-${{ github.job }}-${{ matrix.toolchain || '1.99.1' }}-${{ hashFiles('Cargo.lock', 'rust-toolchain.toml', '.ci/pins.sh') }}",
+          },
+        },
+        {
+          name: "Fresh evidence directory",
+          run: "rm -rf target/ci && mkdir -p target/ci",
+        },
+        {
+          name: "Library, CLI, RFC and property tests",
+          run: "bash scripts/ci/run.sh tests cargo test --locked --all-features",
+        },
+        {
+          name: "Release-mode tests",
+          run: "bash scripts/ci/run.sh release-tests cargo test --locked --release --all-features",
+        },
+        {
+          name: "Feature compatibility",
+          run: "bash scripts/ci/run.sh no-default-features cargo test --locked --no-default-features",
+        },
+        {
+          name: "Canonical execution receipts",
+          run: "bash scripts/ci/finalize-evidence.sh",
+          if: "${{ always() }}",
+        },
+        {
+          name: "Retain execution evidence",
+          if: "${{ always() }}",
+          uses: "actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f", # v6.0.0
+          with: {
+            name: "evidence-${{ github.job }}-${{ matrix.os || runner.os }}-${{ matrix.toolchain || 'pinned' }}",
+            path: "target/ci/",
+            if-no-files-found: "error",
+            retention-days: 30,
+          },
+        },
+      ],
+    },
+    conformance: {
+      name: "Standards, KYAML, K9 and DEED",
+      runs-on: "ubuntu-24.04",
+      timeout-minutes: 30,
+      steps: [
+        {
+          uses: "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1", # v7.0.1
+          with: {
+            persist-credentials: false,
+          },
+        },
+        {
+          name: "Pinned Rust",
+          run: "rustup show active-toolchain",
+        },
+        {
+          uses: "actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9", # v6.1.0
+          with: {
+            path: "~/.cargo/registry\n~/.cargo/git\ntarget",
+            key: "rust-${{ runner.os }}-${{ github.job }}-${{ matrix.toolchain || '1.99.1' }}-${{ hashFiles('Cargo.lock', 'rust-toolchain.toml', '.ci/pins.sh') }}",
+          },
+        },
+        {
+          name: "Fresh evidence directory",
+          run: "rm -rf target/ci && mkdir -p target/ci",
+        },
+        {
+          name: "Install verified conformance tools",
+          run: "bash scripts/ci/provision.sh conformance",
+          env: {
+            GH_TOKEN: "${{ github.token }}",
+          },
+        },
+        {
+          name: "Pinned standards and semantic validators",
+          run: "bash scripts/ci/run.sh conformance bash scripts/ci/conformance.sh",
+        },
+        {
+          name: "Canonical execution receipts",
+          run: "bash scripts/ci/finalize-evidence.sh",
+          if: "${{ always() }}",
+        },
+        {
+          name: "Retain execution evidence",
+          if: "${{ always() }}",
+          uses: "actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f", # v6.0.0
+          with: {
+            name: "evidence-${{ github.job }}-${{ matrix.os || runner.os }}-${{ matrix.toolchain || 'pinned' }}",
+            path: "target/ci/",
+            if-no-files-found: "error",
+            retention-days: 30,
+          },
+        },
+      ],
+    },
+    benchmarks: {
+      name: "Benchmark measurements and controls",
+      runs-on: "ubuntu-24.04",
+      timeout-minutes: 25,
+      steps: [
+        {
+          uses: "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1", # v7.0.1
+          with: {
+            persist-credentials: false,
+          },
+        },
+        {
+          name: "Pinned Rust",
+          run: "rustup show active-toolchain",
+        },
+        {
+          uses: "actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9", # v6.1.0
+          with: {
+            path: "~/.cargo/registry\n~/.cargo/git\ntarget",
+            key: "rust-${{ runner.os }}-${{ github.job }}-${{ matrix.toolchain || '1.99.1' }}-${{ hashFiles('Cargo.lock', 'rust-toolchain.toml', '.ci/pins.sh') }}",
+          },
+        },
+        {
+          name: "Fresh evidence directory",
+          run: "rm -rf target/ci && mkdir -p target/ci",
+        },
+        {
+          name: "Proven-tests benchmark tools and workloads",
+          run: "bash scripts/ci/run.sh benchmarks bash scripts/ci/benchmarks.sh",
+        },
+        {
+          name: "Canonical execution receipts",
+          run: "bash scripts/ci/finalize-evidence.sh",
+          if: "${{ always() }}",
+        },
+        {
+          name: "Retain execution evidence",
+          if: "${{ always() }}",
+          uses: "actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f", # v6.0.0
+          with: {
+            name: "evidence-${{ github.job }}-${{ matrix.os || runner.os }}-${{ matrix.toolchain || 'pinned' }}",
+            path: "target/ci/",
+            if-no-files-found: "error",
+            retention-days: 30,
+          },
+        },
+      ],
+    },
+    recon: {
+      name: "Pons and panic-attack recon",
+      runs-on: "ubuntu-24.04",
+      timeout-minutes: 45,
+      steps: [
+        {
+          uses: "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1", # v7.0.1
+          with: {
+            persist-credentials: false,
+          },
+        },
+        {
+          name: "Pinned Rust",
+          run: "rustup show active-toolchain",
+        },
+        {
+          uses: "actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9", # v6.1.0
+          with: {
+            path: "~/.cargo/registry\n~/.cargo/git\ntarget",
+            key: "rust-${{ runner.os }}-${{ github.job }}-${{ matrix.toolchain || '1.99.1' }}-${{ hashFiles('Cargo.lock', 'rust-toolchain.toml', '.ci/pins.sh') }}",
+          },
+        },
+        {
+          name: "Fresh evidence directory",
+          run: "rm -rf target/ci && mkdir -p target/ci",
+        },
+        {
+          name: "Pinned scanners and report validation",
+          run: "bash scripts/ci/run.sh recon bash scripts/ci/recon.sh",
+        },
+        {
+          name: "Canonical execution receipts",
+          run: "bash scripts/ci/finalize-evidence.sh",
+          if: "${{ always() }}",
+        },
+        {
+          name: "Retain execution evidence",
+          if: "${{ always() }}",
+          uses: "actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f", # v6.0.0
+          with: {
+            name: "evidence-${{ github.job }}-${{ matrix.os || runner.os }}-${{ matrix.toolchain || 'pinned' }}",
+            path: "target/ci/",
+            if-no-files-found: "error",
+            retention-days: 30,
+          },
+        },
+      ],
+    },
+    hypatia: {
+      name: "Hypatia local rules",
+      runs-on: "ubuntu-24.04",
+      timeout-minutes: 30,
+      steps: [
+        {
+          uses: "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1", # v7.0.1
+          with: {
+            persist-credentials: false,
+          },
+        },
+        {
+          name: "Pinned Rust",
+          run: "rustup show active-toolchain",
+        },
+        {
+          uses: "actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9", # v6.1.0
+          with: {
+            path: "~/.cargo/registry\n~/.cargo/git\ntarget",
+            key: "rust-${{ runner.os }}-${{ github.job }}-${{ matrix.toolchain || '1.99.1' }}-${{ hashFiles('Cargo.lock', 'rust-toolchain.toml', '.ci/pins.sh') }}",
+          },
+        },
+        {
+          name: "Fresh evidence directory",
+          run: "rm -rf target/ci && mkdir -p target/ci",
+        },
+        {
+          name: "Pinned Elixir and Erlang",
+          uses: "erlef/setup-beam@54075bcc5e249e4758d363f27d099f55d843f124", # v1.24.1
+          with: {
+            elixir-version: "1.19.4",
+            otp-version: "28.3",
+          },
+        },
+        {
+          name: "Build and run the real Hypatia scanner",
+          run: "bash scripts/ci/run.sh hypatia bash scripts/ci/hypatia.sh",
+        },
+        {
+          name: "Canonical execution receipts",
+          run: "bash scripts/ci/finalize-evidence.sh",
+          if: "${{ always() }}",
+        },
+        {
+          name: "Retain execution evidence",
+          if: "${{ always() }}",
+          uses: "actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f", # v6.0.0
+          with: {
+            name: "evidence-${{ github.job }}-${{ matrix.os || runner.os }}-${{ matrix.toolchain || 'pinned' }}",
+            path: "target/ci/",
+            if-no-files-found: "error",
+            retention-days: 30,
+          },
+        },
+      ],
+    },
+    squabble: {
+      name: "Squabbler dependency chains",
+      runs-on: "ubuntu-24.04",
+      timeout-minutes: 20,
+      steps: [
+        {
+          uses: "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1", # v7.0.1
+          with: {
+            persist-credentials: false,
+          },
+        },
+        {
+          name: "Pinned Rust",
+          run: "rustup show active-toolchain",
+        },
+        {
+          uses: "actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9", # v6.1.0
+          with: {
+            path: "~/.cargo/registry\n~/.cargo/git\ntarget",
+            key: "rust-${{ runner.os }}-${{ github.job }}-${{ matrix.toolchain || '1.99.1' }}-${{ hashFiles('Cargo.lock', 'rust-toolchain.toml', '.ci/pins.sh') }}",
+          },
+        },
+        {
+          name: "Fresh evidence directory",
+          run: "rm -rf target/ci && mkdir -p target/ci",
+        },
+        {
+          name: "Install the pinned, attested estate Squabbler",
+          uses: "hyperpolymath/cicd-squabbler/.github/actions/squabble@14f853fde902ab2d7631070d87a9dc9122e01013", # 2026-10-22 consumer action
+        },
+        {
+          name: "Live upstream chains and no-bypass controls",
+          run: "bash scripts/ci/run.sh squabble bash scripts/ci/squabble.sh",
+          env: {
+            GH_TOKEN: "${{ github.token }}",
+          },
+        },
+        {
+          name: "Canonical execution receipts",
+          run: "bash scripts/ci/finalize-evidence.sh",
+          if: "${{ always() }}",
+        },
+        {
+          name: "Retain execution evidence",
+          if: "${{ always() }}",
+          uses: "actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f", # v6.0.0
+          with: {
+            name: "evidence-${{ github.job }}-${{ matrix.os || runner.os }}-${{ matrix.toolchain || 'pinned' }}",
+            path: "target/ci/",
+            if-no-files-found: "error",
+            retention-days: 30,
+          },
+        },
+      ],
+      permissions: {
+        contents: "read",
+        attestations: "read",
+      },
+    },
+    security: {
+      name: "Dependency audit and coverage",
+      runs-on: "ubuntu-24.04",
+      timeout-minutes: 30,
+      steps: [
+        {
+          uses: "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1", # v7.0.1
+          with: {
+            persist-credentials: false,
+          },
+        },
+        {
+          name: "Pinned Rust",
+          run: "rustup show active-toolchain",
+        },
+        {
+          uses: "actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9", # v6.1.0
+          with: {
+            path: "~/.cargo/registry\n~/.cargo/git\ntarget",
+            key: "rust-${{ runner.os }}-${{ github.job }}-${{ matrix.toolchain || '1.99.1' }}-${{ hashFiles('Cargo.lock', 'rust-toolchain.toml', '.ci/pins.sh') }}",
+          },
+        },
+        {
+          name: "Fresh evidence directory",
+          run: "rm -rf target/ci && mkdir -p target/ci",
+        },
+        {
+          name: "Supply-chain audit",
+          run: "bash scripts/ci/run.sh audit bash scripts/ci/audit.sh",
+          env: {
+            GH_TOKEN: "${{ github.token }}",
+          },
+        },
+        {
+          name: "Instrumented tests and coverage floor",
+          run: "bash scripts/ci/run.sh coverage bash scripts/ci/coverage.sh",
+        },
+        {
+          name: "Canonical execution receipts",
+          run: "bash scripts/ci/finalize-evidence.sh",
+          if: "${{ always() }}",
+        },
+        {
+          name: "Retain execution evidence",
+          if: "${{ always() }}",
+          uses: "actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f", # v6.0.0
+          with: {
+            name: "evidence-${{ github.job }}-${{ matrix.os || runner.os }}-${{ matrix.toolchain || 'pinned' }}",
+            path: "target/ci/",
+            if-no-files-found: "error",
+            retention-days: 30,
+          },
+        },
+      ],
+    },
+    required: {
+      name: "Required CI",
+      if: "${{ always() }}",
+      needs: [
+        "quality",
+        "test",
+        "conformance",
+        "benchmarks",
+        "recon",
+        "hypatia",
+        "squabble",
+        "security",
+      ],
+      runs-on: "ubuntu-24.04",
+      timeout-minutes: 5,
+      steps: [
+        {
+          name: "Every mandatory lane must actually succeed",
+          run: "jq -e 'length == 8 and all(.[]; .result == \"success\")' <<< \"$NEEDS\"",
+          env: {
+            NEEDS: "${{ toJSON(needs) }}",
+          },
         },
       ],
     },

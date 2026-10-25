@@ -1,0 +1,19 @@
+;; SPDX-License-Identifier: CC-BY-SA-4.0
+(repo-deed
+  :schema-version "1.0.0"
+  :canonical-name "ijson-jcs"
+  :repo-uuid #u8"gv-clade-index:github.com/hyperpolymath/ijson-jcs"
+  :beholding-chora #u5"estate/chora"
+  (purpose :text "The estate I-JSON validator and JCS canonicalizer: Rust library and CLI.")
+  (front-doors :human "README.md" :instructions "AGENTS.md")
+  (routing
+    (implementation :paths ("src/"))
+    (verification :paths ("tests/" "benches/" "verification/" "scripts/tests/"))
+    (automation :paths (".github/workflows/" "scripts/ci/" ".ci/"))
+    (conformance :paths ("ci.k9.ncl" ".ci/standards.sha256")))
+  (invariants
+    (rule :text "Use this repository's ijson-jcs for JSON and KYAML for YAML content; retain tool-required filenames.")
+    (rule :text "Never bypass a check, pretend a missing scan passed, or promote empirical tests to proofs.")
+    (rule :text "Preserve historical affirmations and signed bytes; an agent cannot affirm for the owner.")
+    (rule :text "Existing licence and SPDX declarations are owner-only. New files follow the existing licence split."))
+  (scope :text "JSON-LD byte canonicalization is not RDF dataset canonicalization. No context resolution. kyq remains an upstream integration, not a deployed gate."))

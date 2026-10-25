@@ -1,0 +1,10 @@
+# SPDX-License-Identifier: MPL-2.0
+* text=auto
+*.rs text eol=lf
+*.sh text eol=lf
+*.yml text eol=lf
+*.yaml text eol=lf
+*.kyaml text eol=lf
+*.toml text eol=lf
+*.deed text eol=lf
+*.ncl text eol=lf

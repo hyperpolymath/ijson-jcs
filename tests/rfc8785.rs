@@ -34,7 +34,11 @@ fn appendix_b_binary64_vectors() {
     ];
     for &(bits, want) in cases {
         let number = serde_json::Number::from_f64(f64::from_bits(bits)).unwrap();
-        assert_eq!(to_jcs_string(&Value::Number(number)).unwrap(), want, "{bits:016x}");
+        assert_eq!(
+            to_jcs_string(&Value::Number(number)).unwrap(),
+            want,
+            "{bits:016x}"
+        );
     }
 }
 
@@ -48,15 +52,32 @@ fn decimal_ties_choose_even_not_rust_generic_formatting() {
 fn utf16_order_is_not_scalar_order_and_arrays_do_not_sort() {
     let input = r#"{"\u20ac":"Euro Sign","\r":"Carriage Return","\ufb33":"Hebrew Letter Dalet With Dagesh","1":"One","\ud83d\ude00":"Emoji: Grinning Face","\u0080":"Control","\u00f6":"Latin Small Letter O With Diaeresis"}"#;
     let value = parse_json(input, JsonMode::Canonical).unwrap();
-    assert_eq!(to_jcs_string(&value).unwrap(), "{\"\\r\":\"Carriage Return\",\"1\":\"One\",\"\u{0080}\":\"Control\",\"ö\":\"Latin Small Letter O With Diaeresis\",\"€\":\"Euro Sign\",\"😀\":\"Emoji: Grinning Face\",\"דּ\":\"Hebrew Letter Dalet With Dagesh\"}");
-    let value = parse_json(r#"[{"\ue000":1,"\ud800\udc00":2},3,1,2]"#, JsonMode::Canonical).unwrap();
-    assert_eq!(to_jcs_string(&value).unwrap(), "[{\"𐀀\":2,\"\u{e000}\":1},3,1,2]");
+    assert_eq!(
+        to_jcs_string(&value).unwrap(),
+        "{\"\\r\":\"Carriage Return\",\"1\":\"One\",\"\u{0080}\":\"Control\",\"ö\":\"Latin Small Letter O With Diaeresis\",\"€\":\"Euro Sign\",\"😀\":\"Emoji: Grinning Face\",\"דּ\":\"Hebrew Letter Dalet With Dagesh\"}"
+    );
+    let value = parse_json(
+        r#"[{"\ue000":1,"\ud800\udc00":2},3,1,2]"#,
+        JsonMode::Canonical,
+    )
+    .unwrap();
+    assert_eq!(
+        to_jcs_string(&value).unwrap(),
+        "[{\"𐀀\":2,\"\u{e000}\":1},3,1,2]"
+    );
 }
 
 #[test]
 fn canonicalization_does_not_normalize_unicode_or_resolve_json_ld() {
-    let value = parse_json(r#"{"é":1,"e\u0301":2,"@context":"https://example.invalid/context"}"#, JsonMode::Canonical).unwrap();
-    assert_eq!(to_jcs_string(&value).unwrap(), "{\"@context\":\"https://example.invalid/context\",\"e\u{0301}\":2,\"é\":1}");
+    let value = parse_json(
+        r#"{"é":1,"e\u0301":2,"@context":"https://example.invalid/context"}"#,
+        JsonMode::Canonical,
+    )
+    .unwrap();
+    assert_eq!(
+        to_jcs_string(&value).unwrap(),
+        "{\"@context\":\"https://example.invalid/context\",\"e\u{0301}\":2,\"é\":1}"
+    );
 }
 
 #[test]

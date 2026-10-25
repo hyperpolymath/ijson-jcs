@@ -1,0 +1,19 @@
+// SPDX-License-Identifier: CC-BY-SA-4.0
+= Why this repository exists
+
+Two JSON texts can mean the same thing but contain different bytes. Hashes and
+signatures see bytes, not meaning. This library validates the estate's I-JSON
+profile and emits RFC 8785 JCS bytes with UTF-16 key ordering and ECMAScript
+number serialization. The CLI adds explicit file operations; it does not fetch
+JSON-LD contexts or change record framing.
+
+The important boundary is before parsing: a generic map loses duplicate keys,
+and converting a very large integer token to a float loses its spelling.
+Strict modes inspect both the parsed structure and the original text. The
+estate's conservative integer-token rule is stricter than general binary64
+JCS; it remains explicit, including the finite-float round-trip limitation.
+
+CI runs the same commands contributors use, pins upstream policy/tool revisions,
+and distinguishes empirical tests, static heuristics, missing evidence and
+machine-checked proofs. It cannot confer owner affirmation or configure branch
+protection without the required GitHub authority.

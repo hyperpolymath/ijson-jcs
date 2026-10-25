@@ -8,20 +8,23 @@
 name = "ijson-jcs"
 version = "0.1.0"
 edition = "2024"
+rust-version = "1.85"
+readme = "README.md"
 authors = ["Hyperpolymath Estate"]
 description = "I-JSON validation and JCS canonicalization library for deterministic JSON handling"
 license = "MPL-2.0"
 repository = "https://github.com/hyperpolymath/ijson-jcs"
-keywords = ["json", "ijson", "rfc7493", "jcs", "rfc8785", "canonical", "deterministic", "hashing", "signing"]
+keywords = ["json", "ijson", "jcs", "canonical", "signing"]
 categories = ["encoding", "data-structures", "cryptography"]
 
 [dependencies]
-serde = { version = "1", features = ["derive"] }
+serde = "1"
 serde_json = { version = "1", features = ["float_roundtrip"] }
 thiserror = "2"
+ryu-js = "1.0.3"
 
 [dev-dependencies]
-anyhow = "1"
+proptest = { version = "=1.9.0", default-features = false, features = ["std"] }
 
 [features]
 default = ["std"]
@@ -35,5 +38,6 @@ strip = "symbols"
 [package.metadata.docs.rs]
 all-features = true
 
-# Maintain compatibility with the Groove implementation
-# groove = "0.3.0"
+[[bench]]
+name = "jcs"
+harness = false

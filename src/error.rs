@@ -70,6 +70,15 @@ impl IJsonError {
 /// Error type for I-JSON validation failures
 #[derive(Debug, Error, Clone, PartialEq, Eq)]
 pub enum ValidationError {
+    /// A constructed value exceeds the bounded validator/serializer depth.
+    #[error("Container nesting exceeds the supported depth of {limit}")]
+    NestingTooDeep {
+        /// Maximum supported number of nested containers.
+        limit: usize,
+        /// Legacy slash-joined path with RFC 6901-escaped segments.
+        path: String,
+    },
+
     /// Object contains duplicate keys
     #[error("Duplicate key in JSON object: {key}")]
     DuplicateKey {
@@ -118,8 +127,9 @@ pub enum ValidationError {
         path: String,
     },
 
-    /// JSON contains a control character (U+0000..U+001F) outside allowed contexts
-    /// Allowed control characters in I-JSON strings: U+0009 (TAB), U+000A (LF), U+000D (CR)
+    /// Legacy classification for consumers' own string policies.
+    /// All escaped U+0000..U+001F controls are valid I-JSON; this validator
+    /// never emits this variant. Raw controls are JSON parse errors.
     #[error("Control character in string: U+{character:04X} at {location}")]
     ControlCharacter {
         /// The control character code point
@@ -148,10 +158,15 @@ pub enum ValidationError {
 }
 
 impl ValidationError {
-    /// Returns the JSON Pointer path to the validation error
+    /// Returns the legacy slash-joined path to the validation error.
+    ///
+    /// Segments escape `~` and `/` per RFC 6901, but historical paths omit
+    /// the initial slash. The root is empty. This is not a complete JSON
+    /// Pointer (in particular, an empty root key has the same spelling).
     pub fn path(&self) -> &str {
         match self {
-            Self::DuplicateKey { path, .. }
+            Self::NestingTooDeep { path, .. }
+            | Self::DuplicateKey { path, .. }
             | Self::UnpairedSurrogate { path, .. }
             | Self::Noncharacter { path, .. }
             | Self::UnsafeInteger { path, .. }

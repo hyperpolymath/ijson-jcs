@@ -28,7 +28,6 @@
 // This module validates that serde_json::Value data conforms to I-JSON.
 
 use serde_json::Value;
-use std::collections::HashSet;
 
 use crate::error::ValidationError;
 
@@ -88,139 +87,42 @@ pub const SAFE_UINT_MAX: u64 = 9007199254740991; // 2^53 - 1
 /// assert!(validate_i_json(&valid).is_ok());
 /// ```
 pub fn validate_i_json(value: &Value) -> Result<(), ValidationError> {
-    let mut context = ValidationContext::new();
-    validate_value(value, &mut context)?;
-
-    // Check top-level recommendation (SHOULD, not MUST)
-    // I-JSON recommends that top-level values be objects or arrays,
-    // but doesn't require it. For maximum compatibility, we'll allow
-    // any valid JSON at the top level, but this could be made stricter
-    // with a configuration option in the future.
-
-    Ok(())
+    validate_value(value, &mut Vec::new(), 0)
 }
 
-/// Context for validation with path tracking and duplicate key detection
-#[derive(Debug, Clone)]
-struct ValidationContext {
-    /// Current path in JSON Pointer format
-    path: String,
-    /// Set of keys seen in current object (for duplicate detection)
-    current_keys: HashSet<String>,
-    /// Whether we've seen a top-level object or array
-    top_level_object_or_array: bool,
-}
-
-impl ValidationContext {
-    fn new() -> Self {
-        Self {
-            path: String::new(),
-            current_keys: HashSet::new(),
-            top_level_object_or_array: false,
-        }
+/// Validate a built value with a bounded call stack and lossless path segments.
+/// Duplicate names cannot exist in a `Value::Object`; only the text parser
+/// can check them. Do not maintain a second, misleading duplicate detector.
+fn validate_value(
+    value: &Value,
+    segments: &mut Vec<String>,
+    depth: usize,
+) -> Result<(), ValidationError> {
+    if matches!(value, Value::Object(_) | Value::Array(_)) && depth >= crate::MAX_DEPTH {
+        return Err(ValidationError::NestingTooDeep {
+            limit: crate::MAX_DEPTH,
+            path: segments.join("/"),
+        });
     }
-
-    #[allow(dead_code)]
-    fn is_top_level_object_or_array(&self) -> bool {
-        self.top_level_object_or_array
-    }
-
-    /// Enter a new object context
-    fn enter_object(&mut self) {
-        self.current_keys.clear();
-        if self.path.is_empty() {
-            self.top_level_object_or_array = true;
-        }
-    }
-
-    /// Exit object context
-    fn exit_object(&mut self) {
-        self.current_keys.clear();
-    }
-
-    /// Add a key to current object, checking for duplicates
-    fn add_key(&mut self, key: &str) -> Result<(), ValidationError> {
-        if !self.current_keys.insert(key.to_string()) {
-            return Err(ValidationError::DuplicateKey {
-                key: key.to_string(),
-                path: format!("{}{}", self.path, json_pointer_encode(key)),
-            });
-        }
-        Ok(())
-    }
-
-    /// Push path segment for JSON Pointer
-    fn push_path(&mut self, segment: &str) {
-        if !self.path.is_empty() {
-            self.path.push('/');
-        }
-        self.path.push_str(&json_pointer_encode(segment));
-    }
-
-    /// Pop path segment
-    fn pop_path(&mut self, segment: &str) {
-        let encoded_segment = json_pointer_encode(segment);
-        if self.path.ends_with(&encoded_segment) {
-            // Remove the segment
-            self.path.truncate(self.path.len() - encoded_segment.len());
-            // Remove trailing slash if present
-            if self.path.ends_with('/') {
-                self.path.pop();
-            }
-        }
-    }
-}
-
-/// Validate a JSON value with path tracking
-fn validate_value(value: &Value, context: &mut ValidationContext) -> Result<(), ValidationError> {
     match value {
         Value::Object(map) => {
-            context.enter_object();
-
             for (key, val) in map {
-                // Validate the key is a valid I-JSON string
-                validate_string_is_i_json(key, &context.path)?;
-
-                // Check for duplicate keys
-                context.add_key(key)?;
-
-                // Push key path
-                context.push_path(key);
-
-                // Validate the value
-                validate_value(val, context)?;
-
-                // Pop key path
-                context.pop_path(key);
+                segments.push(json_pointer_encode(key));
+                validate_string_is_i_json(key, &segments.join("/"))?;
+                validate_value(val, segments, depth + 1)?;
+                segments.pop();
             }
-
-            context.exit_object();
         }
         Value::Array(arr) => {
-            if context.path.is_empty() {
-                context.top_level_object_or_array = true;
-            }
-
             for (i, val) in arr.iter().enumerate() {
-                // Push array index path
-                context.push_path(&i.to_string());
-
-                // Validate the value
-                validate_value(val, context)?;
-
-                // Pop array index path
-                context.pop_path(&i.to_string());
+                segments.push(i.to_string());
+                validate_value(val, segments, depth + 1)?;
+                segments.pop();
             }
         }
-        Value::String(s) => {
-            validate_string_is_i_json(s, &context.path)?;
-        }
-        Value::Number(n) => {
-            validate_number_is_i_json(n, &context.path)?;
-        }
-        Value::Bool(_) | Value::Null => {
-            // Always valid in I-JSON
-        }
+        Value::String(s) => validate_string_is_i_json(s, &segments.join("/"))?,
+        Value::Number(n) => validate_number_is_i_json(n, &segments.join("/"))?,
+        Value::Bool(_) | Value::Null => {}
     }
     Ok(())
 }
@@ -235,15 +137,6 @@ fn validate_value(value: &Value, context: &mut ValidationContext) -> Result<(), 
 fn validate_string_is_i_json(s: &str, path: &str) -> Result<(), ValidationError> {
     for (index, ch) in s.chars().enumerate() {
         let code_point = ch as u32;
-
-        // Check for unpaired surrogates (U+D800..U+DFFF)
-        // These should not appear in valid UTF-8, but we check anyway
-        if (0xD800..=0xDFFF).contains(&code_point) {
-            return Err(ValidationError::UnpairedSurrogate {
-                location: format!("U+{:04X} at index {}", code_point, index),
-                path: path.to_string(),
-            });
-        }
 
         // Check for noncharacters
         if is_noncharacter(code_point) {
@@ -345,19 +238,6 @@ fn validate_number_is_i_json(n: &serde_json::Number, path: &str) -> Result<(), V
     Ok(())
 }
 
-/// Get the type name of a JSON value for error messages
-#[allow(dead_code)]
-fn value_type_name(value: &Value) -> String {
-    match value {
-        Value::Null => "null".to_string(),
-        Value::Bool(_) => "boolean".to_string(),
-        Value::Number(_) => "number".to_string(),
-        Value::String(_) => "string".to_string(),
-        Value::Array(_) => "array".to_string(),
-        Value::Object(_) => "object".to_string(),
-    }
-}
-
 /// JSON Pointer encoding for a key (RFC 6901)
 pub(crate) fn json_pointer_encode(key: &str) -> String {
     key.replace('~', "~0").replace('/', "~1")
@@ -379,16 +259,6 @@ pub fn validate_canonicalizable(value: &Value) -> Result<(), ValidationError> {
 /// `serde_json` parsed from text.
 pub fn is_i_json(value: &Value) -> bool {
     validate_i_json(value).is_ok()
-}
-
-#[allow(dead_code)]
-/// Check if a string is valid I-JSON (non-failing version)
-pub fn is_valid_i_json_string(s: &str) -> bool {
-    // First, parse it
-    match serde_json::from_str::<Value>(s) {
-        Ok(v) => validate_i_json(&v).is_ok(),
-        Err(_) => false,
-    }
 }
 
 #[cfg(test)]
@@ -416,31 +286,14 @@ mod tests {
     }
 
     #[test]
-    fn test_duplicate_keys_detection_logic() {
-        // Test the duplicate key detection logic in ValidationContext
-        let mut context = ValidationContext::new();
-
-        // This should succeed (first insertion)
-        assert!(context.add_key("test").is_ok());
-
-        // This should fail (duplicate)
-        let result = context.add_key("test");
-        assert!(result.is_err());
-        assert!(result.unwrap_err().is_duplicate_key());
-    }
-
-    #[test]
     fn test_noncharacters() {
-        // U+FFFF is a noncharacter
-        let nonchar = '\u{FFFF}';
-
-        // This should fail during string validation
-        let value = json!({"text": format!("{}", nonchar)});
-        if let Ok(parsed) = serde_json::from_str::<Value>(&value.to_string()) {
-            let result = validate_i_json(&parsed);
-            // Should fail due to noncharacter
-            if let Err(e) = result {
-                assert!(e.is_string_error());
+        for code in (0xFDD0..=0xFDEF).chain((0..=16).flat_map(|plane| {
+            [plane * 0x10000 + 0xFFFE, plane * 0x10000 + 0xFFFF]
+        })) {
+            let nonchar = char::from_u32(code).unwrap();
+            for value in [json!({"text": nonchar.to_string()}), json!({(nonchar.to_string()): 1})] {
+                let err = validate_i_json(&value).unwrap_err();
+                assert!(matches!(err, ValidationError::Noncharacter { .. }));
             }
         }
     }
@@ -501,8 +354,8 @@ mod tests {
 
     #[test]
     fn test_string_validation_helpers() {
-        assert!(is_valid_i_json_string(r#"{"a": 1}"#));
-        assert!(!is_valid_i_json_string(r#"invalid json"#));
+        assert!(crate::is_valid_i_json_string(r#"{"a": 1}"#));
+        assert!(!crate::is_valid_i_json_string(r#"invalid json"#));
     }
 
     #[test]
@@ -540,30 +393,8 @@ mod tests {
 
     #[test]
     fn test_path_tracking() {
-        // Test that path tracking works correctly for nested structures
-        let value = json!({
-            "level1": {
-                "level2": {
-                    "value": 42
-                }
-            }
-        });
-
-        // This should pass validation
-        let result = validate_i_json(&value);
-        assert!(result.is_ok());
-
-        // Test with a string that has invalid characters
-        let value_with_control = json!({
-            "level1": {
-                "level2": {
-                    "invalid": "\u{0000}" // null character
-                }
-            }
-        });
-
-        let _result = validate_i_json(&value_with_control);
-        // This might pass or fail depending on how serde_json handles the null character
-        // The important thing is that path tracking works
+        let value = json!({"level1": {"level2": {"invalid": "\u{ffff}"}}});
+        assert_eq!(validate_i_json(&value).unwrap_err().path(), "level1/level2/invalid");
+        assert!(validate_i_json(&json!({"level1": {"control": "\u{0000}"}})).is_ok());
     }
 }

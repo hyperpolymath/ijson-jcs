@@ -37,6 +37,10 @@
           run: "rustup show active-toolchain",
         },
         {
+          name: "Bootstrap registry lock and formatting",
+          run: "bash scripts/ci/run.sh bootstrap bash scripts/ci/bootstrap.sh",
+        },
+        {
           name: "Test library, CLI and documentation",
           run: "bash scripts/ci/run.sh tests cargo test --locked --all-features",
         },

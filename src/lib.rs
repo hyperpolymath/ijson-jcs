@@ -54,6 +54,10 @@ mod strict;
 
 use std::fmt;
 
+/// Maximum container depth accepted for a programmatically constructed value.
+/// Text input is additionally bounded by serde_json's recursion limit.
+pub const MAX_DEPTH: usize = 128;
+
 /// JSON parsing and validation modes
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
 pub enum JsonMode {
@@ -136,9 +140,8 @@ pub fn parse_json(input: &str, mode: JsonMode) -> Result<Value, IJsonError> {
             Ok(value)
         }
         JsonMode::Canonical => {
-            ijson::validate_i_json(&value)?;
+            ijson::validate_canonicalizable(&value)?;
             strict::check_integer_tokens(input)?;
-            jcs::validate_canonicalizable(&value)?;
             Ok(value)
         }
     }

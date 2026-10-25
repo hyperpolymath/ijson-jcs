@@ -35,7 +35,7 @@
 // deliberately restricted to integers only. This generalization:
 //
 // - Handles all I-JSON number types (integers and floats)
-// - Uses proper ES number-to-string rules via serde_json
+// - Uses ECMAScript-compatible shortest number formatting via ryu-js
 // - Maintains the same deterministic output for the Groove use case
 //
 // This means the Groove implementation can be replaced with this one without
@@ -44,15 +44,8 @@
 use serde_json::Value;
 use std::cmp::Ordering;
 
-use crate::error::{CanonicalizationError, ValidationError};
-use crate::ijson;
-
-/// The safe integer limits for IEEE-754 binary64
-/// Numbers outside this range cannot be represented exactly as doubles
-/// and MUST be represented as strings in I-JSON for exactness
-const SAFE_INT_MIN: i64 = -9007199254740991; // -(2^53 - 1)
-const SAFE_INT_MAX: i64 = 9007199254740991; // 2^53 - 1
-const SAFE_UINT_MAX: u64 = 9007199254740991; // 2^53 - 1
+use crate::error::CanonicalizationError;
+use crate::ijson::{self, SAFE_INT_MIN, SAFE_INT_MAX, SAFE_UINT_MAX};
 
 /// Canonicalize a JSON value to JCS format (RFC 8785)
 ///
@@ -78,7 +71,6 @@ const SAFE_UINT_MAX: u64 = 9007199254740991; // 2^53 - 1
 pub fn to_jcs(value: &Value) -> Result<Vec<u8>, CanonicalizationError> {
     // Validate I-JSON compliance first (JCS requires I-JSON input)
     ijson::validate_i_json(value)?;
-    validate_canonicalizable(value)?;
 
     let mut out = Vec::with_capacity(256);
     write_canonical(value, &mut out)?;
@@ -152,49 +144,10 @@ pub(crate) fn es_number_to_string(f: f64) -> Result<String, CanonicalizationErro
     if !f.is_finite() {
         return Err(CanonicalizationError::NumberFormatError(f.to_string()));
     }
-    if f == 0.0 {
-        return Ok("0".to_string());
-    }
-
-    // Rust's `{:e}` yields the shortest digit string that round-trips,
-    // e.g. "1.2345e-7" or "-4.5e0".
-    let sci = format!("{:e}", f.abs());
-    let (mantissa, exp) = sci
-        .split_once('e')
-        .ok_or_else(|| CanonicalizationError::NumberFormatError(sci.clone()))?;
-    let exp: i32 = exp
-        .parse()
-        .map_err(|_| CanonicalizationError::NumberFormatError(sci.clone()))?;
-    let digits: String = mantissa.chars().filter(|c| *c != '.').collect();
-    let k = digits.len() as i32;
-    let n = exp + 1; // position of the decimal point relative to the digits
-
-    let mut s = String::with_capacity(32);
-    if f < 0.0 {
-        s.push('-');
-    }
-    if k <= n && n <= 21 {
-        s.push_str(&digits);
-        s.extend(std::iter::repeat_n('0', (n - k) as usize));
-    } else if 0 < n && n <= 21 {
-        s.push_str(&digits[..n as usize]);
-        s.push('.');
-        s.push_str(&digits[n as usize..]);
-    } else if -6 < n && n <= 0 {
-        s.push_str("0.");
-        s.extend(std::iter::repeat_n('0', (-n) as usize));
-        s.push_str(&digits);
-    } else {
-        s.push_str(&digits[..1]);
-        if k > 1 {
-            s.push('.');
-            s.push_str(&digits[1..]);
-        }
-        s.push('e');
-        s.push(if n - 1 < 0 { '-' } else { '+' });
-        s.push_str(&(n - 1).abs().to_string());
-    }
-    Ok(s)
+    // Rust's generic float formatter does not specify ECMAScript's tie-to-even
+    // decimal choice (RFC 8785 Appendix B, 43143ff3c1cb0959). Do not rebuild
+    // Number::toString by rearranging Rust's scientific notation.
+    Ok(ryu_js::Buffer::new().format_finite(f).to_owned())
 }
 
 /// Write a string in JCS format
@@ -257,43 +210,13 @@ fn write_object_jcs(
 /// This is NOT the same as simple string comparison for non-ASCII keys.
 /// For ASCII-only keys (which is the common case), this behaves the same
 /// as lexicographic comparison.
-fn sort_keys_utf16(keys: &mut Vec<&String>) {
+fn sort_keys_utf16(keys: &mut [&String]) {
     keys.sort_by(|a, b| utf16_code_unit_cmp(a, b));
 }
 
 /// Compare two strings by UTF-16 code unit order
 fn utf16_code_unit_cmp(a: &str, b: &str) -> Ordering {
-    let a_utf16: Vec<u16> = a.encode_utf16().collect();
-    let b_utf16: Vec<u16> = b.encode_utf16().collect();
-    a_utf16.cmp(&b_utf16)
-}
-
-/// Validate that a value can be canonicalized to JCS
-///
-/// This performs additional checks beyond I-JSON validation to ensure
-/// the value is suitable for canonicalization.
-pub fn validate_canonicalizable(value: &Value) -> Result<(), ValidationError> {
-    // For now, any I-JSON is canonicalizable
-    // In the future, we might add additional constraints
-    ijson::validate_i_json(value)
-}
-
-#[allow(dead_code)]
-/// Create a JCS canonical form from a JSON string
-///
-/// Convenience function that parses, validates, and canonicalizes in one step.
-pub fn canonicalize_json(input: &str) -> Result<Vec<u8>, CanonicalizationError> {
-    let value = serde_json::from_str(input)
-        .map_err(|e| CanonicalizationError::StringEncodingError(e.to_string()))?;
-    canonicalize(&value)
-}
-
-#[allow(dead_code)]
-/// Create a JCS canonical form from JSON bytes
-pub fn canonicalize_json_bytes(input: &[u8]) -> Result<Vec<u8>, CanonicalizationError> {
-    let input_str = std::str::from_utf8(input)
-        .map_err(|e| CanonicalizationError::StringEncodingError(e.to_string()))?;
-    canonicalize_json(input_str)
+    a.encode_utf16().cmp(b.encode_utf16())
 }
 
 #[cfg(test)]
@@ -404,7 +327,8 @@ mod tests {
     #[test]
     fn test_canonicalize_json() {
         let input = r#"{"b": 1, "a": 2}"#;
-        let canonical = canonicalize_json(input).unwrap();
+        let value = crate::parse_json(input, crate::JsonMode::Canonical).unwrap();
+        let canonical = canonicalize(&value).unwrap();
         let canonical_str = String::from_utf8(canonical).unwrap();
 
         assert_eq!(canonical_str, r#"{"a":2,"b":1}"#);

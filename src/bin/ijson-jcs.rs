@@ -1,62 +1,54 @@
 // SPDX-License-Identifier: MPL-2.0
 // Copyright (c) 2026 Hyperpolymath Estate
 //
-// `ijson-jcs` command-line tool: check, fix or produce RFC 8785 (JCS)
-// canonical JSON, parsing input as I-JSON (RFC 7493).
-//
-// Arguments are parsed by hand to keep the crate's dependency set unchanged.
+// I-JSON/JCS file operations. No shell, network, or implicit format migration.
+
+#![forbid(unsafe_code)]
 
 use ijson_jcs::{JsonMode, parse_json_bytes, to_jcs};
-use std::fs;
+use std::ffi::{OsStr, OsString};
+use std::fs::{self, File, OpenOptions};
 use std::io::{self, Read, Write};
+use std::path::{Path, PathBuf};
 use std::process::ExitCode;
+use std::sync::atomic::{AtomicU64, Ordering};
 
-/// Exit status: every input was valid and canonical (or was fixed).
 const EXIT_OK: u8 = 0;
-/// Exit status: `check` found at least one valid but non-canonical file.
 const EXIT_NOT_CANONICAL: u8 = 1;
-/// Exit status: invalid or unreadable input, a write failure, or a usage error.
 const EXIT_INVALID: u8 = 2;
+const DEFAULT_MAX_BYTES: u64 = 64 * 1024 * 1024;
 
 const USAGE: &str = "\
 ijson-jcs - I-JSON (RFC 7493) parsing and JCS (RFC 8785) canonicalisation
 
 USAGE:
     ijson-jcs check FILE...    Report whether each FILE is canonical
-    ijson-jcs fix FILE...      Rewrite each valid FILE in canonical form
+    ijson-jcs fix FILE...      Atomically replace valid regular files
     ijson-jcs canon            Canonicalise stdin to stdout
     ijson-jcs --help           Show this help
     ijson-jcs --version        Show the version
+
+OPTIONS (before --):
+    --max-bytes N              Input limit per file / stdin (default 67108864)
+    --                        Treat all remaining arguments as file names
 
 Input is parsed strictly as I-JSON: duplicate object keys, lone surrogates,
 noncharacters, invalid UTF-8, numbers outside the IEEE-754 double range and
 integers outside +/-(2^53-1) are rejected.
 
-A file counts as canonical if its bytes are exactly the JCS form, optionally
-followed by ONE trailing newline (\\n). `fix` writes the JCS form plus one
-trailing newline; `canon` writes the JCS form with no trailing newline.
-
-`check` prints one line per file: `OK path`, `NOT CANONICAL path` or
-`INVALID path: reason`. `fix` prints `OK path`, `FIXED path` or
-`INVALID path: reason`, and leaves invalid files untouched.
+check accepts the JCS form optionally followed by ONE newline (\\n).
+fix writes one final newline; canon writes none. The estate file profile
+requires that final newline; check alone is not the complete estate gate.
+fix refuses symlinks, hard-linked files (Unix), read-only files and inputs
+whose JCS output would be rejected by the strict integer-token profile.
 
 EXIT STATUS:
     0  all inputs valid and canonical (check), or all fixed (fix, canon)
     1  check: some input valid but not canonical (and none invalid)
-    2  some input invalid or unreadable, a write failed, or a usage error
+    2  invalid/unreadable input, resource limit, write failure, or usage error
 ";
 
-/// Outcome of examining one input's bytes.
-enum Verdict {
-    /// The bytes are the canonical form, optionally plus one trailing `\n`.
-    Canonical,
-    /// The input is valid I-JSON but its bytes differ from the JCS form.
-    NotCanonical,
-    /// The input could not be parsed or is not I-JSON; holds the reason.
-    Invalid(String),
-}
-
-/// Parse `input` as I-JSON and return its JCS canonical bytes, or a reason.
+/// Parse strictly and render JCS bytes, including the legacy error path.
 fn canonical_form(input: &[u8]) -> Result<Vec<u8>, String> {
     let value = parse_json_bytes(input, JsonMode::Canonical).map_err(|e| {
         match e.as_validation_error().map(|v| v.path()) {
@@ -67,143 +59,202 @@ fn canonical_form(input: &[u8]) -> Result<Vec<u8>, String> {
     to_jcs(&value).map_err(|e| e.to_string())
 }
 
-/// Decide whether `input` is canonical, allowing exactly one trailing `\n`.
-fn judge(input: &[u8]) -> Verdict {
-    match canonical_form(input) {
-        Err(reason) => Verdict::Invalid(reason),
-        Ok(canon) => {
-            let body = input.strip_suffix(b"\n").unwrap_or(input);
-            if body == canon.as_slice() {
-                Verdict::Canonical
+/// Read at most one byte beyond the limit, including from an unbounded pipe.
+fn read_bounded(reader: impl Read, limit: u64) -> io::Result<Vec<u8>> {
+    let mut bytes = Vec::new();
+    reader.take(limit + 1).read_to_end(&mut bytes)?;
+    if bytes.len() as u64 > limit {
+        return Err(io::Error::other(format!("input exceeds --max-bytes {limit}")));
+    }
+    Ok(bytes)
+}
+
+/// Non-regular files (e.g. FIFOs) must not make a file check hang indefinitely.
+fn read_file(path: &Path, limit: u64) -> io::Result<Vec<u8>> {
+    if !fs::metadata(path)?.is_file() {
+        return Err(io::Error::other("not a regular file"));
+    }
+    read_bounded(File::open(path)?, limit)
+}
+
+/// Remove an uncommitted temporary file on every ordinary failure path.
+struct PendingFile(PathBuf);
+
+impl Drop for PendingFile {
+    fn drop(&mut self) {
+        // After a successful rename this path no longer exists. Cleanup is
+        // best-effort: it must not hide the primary write/rename error.
+        let _ = fs::remove_file(&self.0);
+    }
+}
+
+/// Replace in the same directory only after a complete, synced write.
+///
+/// This is atomic replacement, not a lock against concurrent/malicious writers.
+/// Ownership, ACLs and extended attributes are not copied; permission bits are.
+fn atomic_replace(path: &Path, bytes: &[u8], permissions: fs::Permissions) -> io::Result<()> {
+    static NEXT: AtomicU64 = AtomicU64::new(0);
+    let parent = path.parent().filter(|p| !p.as_os_str().is_empty()).unwrap_or(Path::new("."));
+    for _ in 0..128 {
+        let temp = parent.join(format!(
+            ".ijson-jcs.{}.{}.tmp",
+            std::process::id(),
+            NEXT.fetch_add(1, Ordering::Relaxed)
+        ));
+        let mut options = OpenOptions::new();
+        options.write(true).create_new(true);
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::OpenOptionsExt;
+            options.mode(0o600);
+        }
+        let mut file = match options.open(&temp) {
+            Ok(file) => file,
+            Err(e) if e.kind() == io::ErrorKind::AlreadyExists => continue,
+            Err(e) => return Err(e),
+        };
+        let pending = PendingFile(temp);
+        file.write_all(bytes)?;
+        file.set_permissions(permissions)?;
+        file.sync_all()?;
+        drop(file);
+        fs::rename(&pending.0, path)?;
+        return Ok(());
+    }
+    Err(io::Error::other("could not create a unique temporary file"))
+}
+
+/// Check the mutation preconditions before opening or replacing the target.
+fn fix_permissions(path: &Path) -> io::Result<fs::Permissions> {
+    let metadata = fs::symlink_metadata(path)?;
+    if !metadata.is_file() {
+        return Err(io::Error::other("fix requires a regular file, not a symlink or device"));
+    }
+    if metadata.permissions().readonly() {
+        return Err(io::Error::other("fix refuses a read-only file"));
+    }
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::MetadataExt;
+        if metadata.nlink() != 1 {
+            return Err(io::Error::other("fix refuses a hard-linked file"));
+        }
+    }
+    Ok(metadata.permissions())
+}
+
+/// Process files independently; a bad file does not prevent checking the rest.
+fn files_command(files: &[PathBuf], fix: bool, limit: u64, out: &mut impl Write) -> io::Result<u8> {
+    let mut code = EXIT_OK;
+    for path in files {
+        let result = (|| -> Result<&str, String> {
+            let permissions = if fix {
+                Some(fix_permissions(path).map_err(|e| e.to_string())?)
             } else {
-                Verdict::NotCanonical
+                None
+            };
+            let bytes = read_file(path, limit).map_err(|e| format!("cannot read: {e}"))?;
+            let mut wanted = canonical_form(&bytes)?;
+            if !fix {
+                return Ok(if bytes.strip_suffix(b"\n").unwrap_or(&bytes) == wanted {
+                    "OK"
+                } else {
+                    "NOT CANONICAL"
+                });
             }
-        }
-    }
-}
-
-/// `check` subcommand: report each file's status and return the exit code.
-fn cmd_check(files: &[String]) -> u8 {
-    let mut code = EXIT_OK;
-    for path in files {
-        let verdict = match fs::read(path) {
-            Ok(bytes) => judge(&bytes),
-            Err(e) => Verdict::Invalid(format!("cannot read: {e}")),
-        };
-        match verdict {
-            Verdict::Canonical => println!("OK {path}"),
-            Verdict::NotCanonical => {
-                println!("NOT CANONICAL {path}");
-                code = code.max(EXIT_NOT_CANONICAL);
+            // A finite float can render as a bare integer beyond 2^53-1.
+            // Retain the existing strict token policy, but never replace a
+            // valid input with a file that our own checker would reject.
+            canonical_form(&wanted).map_err(|e| format!(
+                "canonical output violates the strict file profile: {e}; use a string for exact integers, or canon for JCS bytes"
+            ))?;
+            wanted.push(b'\n');
+            if wanted == bytes {
+                return Ok("OK");
             }
-            Verdict::Invalid(reason) => {
-                println!("INVALID {path}: {reason}");
-                code = EXIT_INVALID;
+            if let Some(permissions) = permissions {
+                atomic_replace(path, &wanted, permissions).map_err(|e| format!("cannot replace: {e}"))?;
             }
-        }
-    }
-    code
-}
-
-/// `fix` subcommand: rewrite valid files as JCS + `\n`, return the exit code.
-fn cmd_fix(files: &[String]) -> u8 {
-    let mut code = EXIT_OK;
-    for path in files {
-        let bytes = match fs::read(path) {
-            Ok(bytes) => bytes,
-            Err(e) => {
-                println!("INVALID {path}: cannot read: {e}");
-                code = EXIT_INVALID;
-                continue;
+            Ok("FIXED")
+        })();
+        match result {
+            Ok(verdict) => {
+                writeln!(out, "{verdict} {}", path.display())?;
+                if verdict == "NOT CANONICAL" {
+                    code = code.max(EXIT_NOT_CANONICAL);
+                }
             }
-        };
-        let mut wanted = match canonical_form(&bytes) {
-            Ok(canon) => canon,
             Err(reason) => {
-                println!("INVALID {path}: {reason}");
+                writeln!(out, "INVALID {}: {reason}", path.display())?;
                 code = EXIT_INVALID;
-                continue;
             }
-        };
-        wanted.push(b'\n');
-        if wanted == bytes {
-            println!("OK {path}");
-        } else if let Err(e) = fs::write(path, &wanted) {
-            println!("INVALID {path}: cannot write: {e}");
-            code = EXIT_INVALID;
-        } else {
-            println!("FIXED {path}");
         }
     }
-    code
+    Ok(code)
 }
 
-/// `canon` subcommand: canonicalise stdin to stdout, return the exit code.
-fn cmd_canon() -> u8 {
-    let mut input = Vec::new();
-    if let Err(e) = io::stdin().read_to_end(&mut input) {
-        eprintln!("INVALID <stdin>: cannot read: {e}");
-        return EXIT_INVALID;
-    }
-    match canonical_form(&input) {
-        Ok(canon) => {
-            let mut out = io::stdout().lock();
-            if let Err(e) = out.write_all(&canon).and_then(|()| out.flush()) {
-                eprintln!("ijson-jcs: cannot write stdout: {e}");
-                return EXIT_INVALID;
-            }
-            EXIT_OK
-        }
-        Err(reason) => {
-            eprintln!("INVALID <stdin>: {reason}");
-            EXIT_INVALID
-        }
-    }
-}
-
-/// Print a usage error plus a hint to stderr and return the usage exit code.
-fn usage_error(msg: &str) -> u8 {
-    eprintln!("ijson-jcs: {msg}\nTry 'ijson-jcs --help' for usage.");
+/// Print usage failures to stderr; never misclassify them as validation success.
+fn usage_error(message: &str) -> u8 {
+    eprintln!("ijson-jcs: {message}\nTry 'ijson-jcs --help' for usage.");
     EXIT_INVALID
 }
 
-/// Dispatch the command line (without the program name) to a subcommand.
-fn run(args: &[String]) -> u8 {
-    if args.iter().any(|a| a == "-h" || a == "--help") {
-        print!("{USAGE}");
-        return EXIT_OK;
-    }
-    if args.iter().any(|a| a == "-V" || a == "--version") {
-        println!("ijson-jcs {}", env!("CARGO_PKG_VERSION"));
-        return EXIT_OK;
-    }
-    let Some((cmd, rest)) = args.split_first() else {
-        return usage_error("missing command");
-    };
-    // `--` ends option parsing so files whose names start with '-' work.
-    let files: Vec<String> = match rest.first().map(String::as_str) {
-        Some("--") => rest[1..].to_vec(),
-        _ => {
-            if let Some(opt) = rest.iter().find(|a| a.starts_with('-') && a.len() > 1) {
-                return usage_error(&format!("unknown option '{opt}'"));
+/// Parse OS strings so non-UTF-8 file names work, respecting the `--` boundary.
+fn run(args: &[OsString], out: &mut impl Write) -> io::Result<u8> {
+    let mut positional = Vec::new();
+    let mut options = true;
+    let mut limit = DEFAULT_MAX_BYTES;
+    let mut args = args.iter();
+    while let Some(arg) = args.next() {
+        if options && arg == "--" {
+            options = false;
+        } else if options && (arg == "--help" || arg == "-h") {
+            write!(out, "{USAGE}")?;
+            return Ok(EXIT_OK);
+        } else if options && (arg == "--version" || arg == "-V") {
+            writeln!(out, "ijson-jcs {}", env!("CARGO_PKG_VERSION"))?;
+            return Ok(EXIT_OK);
+        } else if options && arg == "--max-bytes" {
+            match args.next().and_then(|v| v.to_str()).and_then(|v| v.parse::<u64>().ok()) {
+                Some(n) if n > 0 && n < usize::MAX as u64 => limit = n,
+                _ => return Ok(usage_error("--max-bytes needs a positive, addressable byte count")),
             }
-            rest.to_vec()
+        } else if options && arg.to_string_lossy().starts_with('-') && arg != "-" {
+            return Ok(usage_error(&format!("unknown option '{}'", arg.to_string_lossy())));
+        } else {
+            positional.push(arg);
         }
+    }
+    let Some((command, files)) = positional.split_first() else {
+        return Ok(usage_error("missing command"));
     };
-    match cmd.as_str() {
-        "check" | "fix" if files.is_empty() => {
-            usage_error(&format!("'{cmd}' needs at least one FILE"))
+    let files: Vec<PathBuf> = files.iter().map(|path| PathBuf::from(*path)).collect();
+    match command.to_str() {
+        Some("check" | "fix") if files.is_empty() => Ok(usage_error("check/fix needs at least one FILE")),
+        Some("check" | "fix") => files_command(&files, command.as_os_str() == OsStr::new("fix"), limit, out),
+        Some("canon") if !files.is_empty() => Ok(usage_error("'canon' reads stdin and takes no FILE")),
+        Some("canon") => {
+            let result = read_bounded(io::stdin().lock(), limit)
+                .map_err(|e| format!("cannot read: {e}"))
+                .and_then(|bytes| canonical_form(&bytes));
+            match result {
+                Ok(bytes) => { out.write_all(&bytes)?; Ok(EXIT_OK) }
+                Err(reason) => { eprintln!("INVALID <stdin>: {reason}"); Ok(EXIT_INVALID) }
+            }
         }
-        "check" => cmd_check(&files),
-        "fix" => cmd_fix(&files),
-        "canon" if !files.is_empty() => usage_error("'canon' reads stdin and takes no FILE"),
-        "canon" => cmd_canon(),
-        other => usage_error(&format!("unknown command '{other}'")),
+        _ => Ok(usage_error(&format!("unknown command '{}'", command.to_string_lossy()))),
     }
 }
 
-/// Entry point: run the CLI and convert its status to a process exit code.
+/// Convert output errors (including broken pipes) into the documented exit 2.
 fn main() -> ExitCode {
-    let args: Vec<String> = std::env::args().skip(1).collect();
-    ExitCode::from(run(&args))
+    let args: Vec<_> = std::env::args_os().skip(1).collect();
+    let mut out = io::stdout().lock();
+    match run(&args, &mut out).and_then(|code| out.flush().map(|()| code)) {
+        Ok(code) => ExitCode::from(code),
+        Err(error) => {
+            eprintln!("ijson-jcs: cannot write stdout: {error}");
+            ExitCode::from(EXIT_INVALID)
+        }
+    }
 }

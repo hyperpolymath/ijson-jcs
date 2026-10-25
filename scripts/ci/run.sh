@@ -10,7 +10,7 @@ mkdir -p target/ci
 status=0
 "$@" 2>&1 | tee "target/ci/$label.log" || status=$?
 if (( status != 0 )); then
-  message=$(tail -c 6000 "target/ci/$label.log")
+  message=$(tail -c 3000 "target/ci/$label.log")
   message=${message//'%'/'%25'}
   message=${message//$'\r'/'%0D'}
   message=${message//$'\n'/'%0A'}

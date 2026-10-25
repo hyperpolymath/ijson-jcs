@@ -65,10 +65,6 @@
           },
         },
         {
-          name: "Apply bootstrap lock/formatter feedback",
-          run: "bash scripts/ci/run.sh bootstrap bash scripts/ci/bootstrap.sh",
-        },
-        {
           name: "Rust formatting",
           run: "bash scripts/ci/run.sh format cargo fmt --all -- --check",
         },
@@ -85,12 +81,20 @@
           run: "bash scripts/ci/run.sh wrapper-controls bash scripts/tests/ci-run.sh",
         },
         {
+          name: "Required gate failure controls",
+          run: "bash scripts/ci/run.sh gate-controls bash scripts/tests/required-gate.sh",
+        },
+        {
+          name: "Release policy failure controls",
+          run: "bash scripts/ci/run.sh release-controls bash scripts/tests/release-policy.sh",
+        },
+        {
           name: "Workflow structure and KYAML",
           run: "bash scripts/ci/run.sh workflow-policy bash scripts/ci/policy.sh",
         },
         {
           name: "Package verification",
-          run: "bash scripts/ci/run.sh package cargo package --locked --allow-dirty",
+          run: "bash scripts/ci/run.sh package cargo package --locked",
         },
         {
           name: "Canonical execution receipts",

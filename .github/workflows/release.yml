@@ -1,0 +1,128 @@
+# SPDX-License-Identifier: MPL-2.0
+# KYAML content; retain the filename required by GitHub.
+{
+  name: "Release",
+  on: {
+    push: {
+      tags: [
+        "v*",
+      ],
+    },
+  },
+  permissions: {
+    contents: "read",
+    attestations: "read",
+  },
+  concurrency: {
+    group: "publish-${{ github.ref }}",
+    cancel-in-progress: false,
+  },
+  defaults: {
+    run: {
+      shell: "bash",
+    },
+  },
+  jobs: {
+    checks: {
+      name: "Re-run every required lane",
+      uses: "./.github/workflows/ci.yml",
+    },
+    package: {
+      name: "Verify signed source and prepare release",
+      needs: [
+        "checks",
+      ],
+      runs-on: "ubuntu-24.04",
+      timeout-minutes: 25,
+      permissions: {
+        contents: "read",
+        actions: "read",
+      },
+      steps: [
+        {
+          uses: "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1", # v7.0.1
+          with: {
+            persist-credentials: false,
+            fetch-depth: 0,
+          },
+        },
+        {
+          name: "Pinned Rust",
+          run: "rustup show active-toolchain",
+        },
+        {
+          name: "Signed tag, protected environment, baseline and package",
+          run: "bash scripts/ci/run.sh release bash scripts/ci/release-check.sh",
+          env: {
+            GH_TOKEN: "${{ github.token }}",
+          },
+        },
+        {
+          name: "Release input artifacts",
+          uses: "actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f", # v6.0.0
+          with: {
+            name: "verified-release-input",
+            path: "target/ci/release/",
+            if-no-files-found: "error",
+            retention-days: 7,
+          },
+        },
+        {
+          name: "Retain execution evidence",
+          if: "${{ always() }}",
+          uses: "actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f", # v6.0.0
+          with: {
+            name: "evidence-${{ github.job }}-${{ runner.os }}-${{ env.RUSTUP_TOOLCHAIN || 'pinned' }}",
+            path: "target/ci/",
+            if-no-files-found: "error",
+            retention-days: 30,
+          },
+        },
+      ],
+    },
+    publish: {
+      name: "Attest and create owner-approved draft",
+      needs: [
+        "package",
+      ],
+      runs-on: "ubuntu-24.04",
+      timeout-minutes: 10,
+      environment: "release",
+      permissions: {
+        contents: "write",
+        id-token: "write",
+        attestations: "write",
+      },
+      steps: [
+        {
+          uses: "actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131", # v7.0.0
+          with: {
+            name: "verified-release-input",
+            path: "release-input",
+          },
+        },
+        {
+          name: "Verify the transferred package bytes",
+          run: "sha256sum --check SHA256SUMS",
+          working-directory: "release-input",
+        },
+        {
+          name: "GitHub build-provenance attestation",
+          uses: "actions/attest-build-provenance@977bb373ede98d70efdf65b84cb5f73e068dcc2a", # v3
+          with: {
+            subject-path: "release-input/*.crate",
+          },
+        },
+        {
+          name: "Create draft, do not publish to crates.io",
+          run: "gh release create \"$TAG\" release-input/*.crate release-input/SHA256SUMS --repo \"$REPOSITORY\" --verify-tag --draft --notes-file release-input/NOTES.md",
+          env: {
+            GH_TOKEN: "${{ github.token }}",
+            TAG: "${{ github.ref_name }}",
+            REPOSITORY: "${{ github.repository }}",
+          },
+        },
+      ],
+    },
+  },
+}

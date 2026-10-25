@@ -26,9 +26,11 @@ ijson-jcs --max-bytes 1048576 check -- -unusual-name.json
 ----
 use ijson_jcs::{parse_json, to_jcs, JsonMode};
 
-let value = parse_json(r#"{"b":2,"a":1}"#, JsonMode::Canonical)?;
-assert_eq!(to_jcs(&value)?, br#"{"a":1,"b":2}"#);
-# Ok::<(), Box<dyn std::error::Error>>(())
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let value = parse_json(r#"{"b":2,"a":1}"#, JsonMode::Canonical)?;
+    assert_eq!(to_jcs(&value)?, br#"{"a":1,"b":2}"#);
+    Ok(())
+}
 ----
 
 `Loose` uses serde_json parsing and keeps the last repeated object member.

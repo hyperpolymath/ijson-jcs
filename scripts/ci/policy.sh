@@ -33,5 +33,6 @@ yq -p yaml -o json '.' .github/workflows/ci.yml | jq -e '
   ((.on.pull_request // {}) | has("paths") or has("paths-ignore") or has("branches") | not) and
   ((.on.merge_group // {}) | has("paths") or has("paths-ignore") | not) and
   (.jobs.required.if == "${{ always() }}") and
-  (.jobs.required.needs | length >= 7)
+  (.jobs.required.needs | sort == (["quality","test","conformance","benchmarks","recon","hypatia","squabble","security","fuzz"] | sort)) and
+  all(.jobs | to_entries[] | select(.key != "required"); .value.if == null)
 ' >/dev/null

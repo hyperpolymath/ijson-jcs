@@ -1,0 +1,204 @@
+// SPDX-License-Identifier: CC-BY-SA-4.0
+= CI, verification evidence and publication
+:toc:
+
+== Trust model
+
+The workflow is an executable recipe, not evidence that a particular revision
+passed it. Read the Actions run and `target/ci/executions.json` for the source
+revision under test. Reports are empirical `Unproven` evidence; they do not
+create an owner affirmation, formal proof, security guarantee or signed release.
+
+Inputs are pinned in `.ci/pins.sh`, `rust-toolchain.toml`, the Cargo lockfiles,
+and immutable action SHAs. Downloaded Linux tool assets are checked against
+SHA256 *before execution*. The RustSec database is intentionally refreshed at
+run time, then its exact revision is recorded. A cached source checkout must
+match its repository/SHA and remain clean. No floating tool-source fallback is
+permitted. Source and advisory freshness are different concerns.
+
+No `pull_request_target`, broad write token, inherited secrets, automatic merge
+or required-event path skip is used. Only the proposal-publishing job has
+`issues: write`; only the approved draft-release job has publication permissions.
+All jobs have time limits. Dependency updates open reviewed PRs, not promotions.
+
+== Required PR, push and merge-queue workflow
+
+`.github/workflows/ci.yml` runs for PRs, main pushes, merge groups, and explicit
+manual/reusable invocations. The `Required CI` job always executes and requires
+*all nine* lane results to equal `success`; a failure, skip, cancellation or
+missing lane cannot be promoted to green. Configure this exact context as
+required on the forge. A YAML check alone cannot enforce repository protection.
+
+[cols="1,3",options="header"]
+|===
+| Lane | Actual work
+| Quality | rustfmt (including fuzz), Clippy warnings-as-errors, package
+verification, wrapper fault controls, actual actionlint, semantic workflow
+policy with `yq`/`jq`, pinned upstream KYAML formatting.
+| Rust matrix | Linux Rust 1.85 and pinned primary Rust; Windows 2025 and macOS
+15 primary Rust. Library/CLI/integration/doc tests in debug and release, plus
+no-default-features compatibility. Matrix failures do not cancel other platforms.
+| Standards / K9 / DEED | Immutable normative hashes; real upstream JSON-policy
+fixtures against this binary; independent drift/framing controls; actual DEED
+parser and strict K9 L2 Nickel fixtures; repository DEED/contract; Bun/JSC oracle
+for over 19,000 finite binary64 inputs.
+| Benchmarks | Real upstream regression-harness controls; four actual checksum
+workloads; validated/canonical proven-bench receipt. Timing comparison is
+explicitly *BOOTSTRAPPING* until an accepted baseline exists.
+| Recon | Source-built Pons and panic-attack, not similarly named substitutes.
+Pons inventories the repo and separately requires complete, nonempty Rust source
+coverage without skips. Reports are schema-checked. Unsuppressed High/Critical
+panic-attack findings fail regardless of the scanner's process exit 0.
+| Hypatia | Real Mix-built escript and upstream rule controls. Seven named local
+modules and severity/schema gates; not a bash fallback. `--exit-zero` only lets
+all findings be collected; High/Critical findings still fail the adapter.
+| Squabbler | Official pinned, attested action; live upstream chains and clean /
+missing-required-check board controls. It never applies an automatic bypass.
+| Audit / coverage | Pinned cargo-audit with recorded fresh RustSec data; actual
+llvm-cov instrumentation, tests and an 85% line-coverage floor. Coverage is not
+path/branch correctness; inline unit-test code can contribute to line coverage.
+| Fuzz smoke | Pinned nightly/compiler and cargo-fuzz; address-sanitized byte and
+binary64 targets, committed seeds, 30-second bounded campaigns. Nonzero completed
+execution counts are required; lockfiles must remain unchanged.
+|===
+
+`verification/suites.toml` separates harness from payload, fault model, firing /
+silence controls and residual uncertainty. A command receipt records argv,
+source SHA, toolchain, elapsed seconds, exit status and log hash. Only commands
+that ran produce receipts. The wrapper's expected-negative controls use isolated
+temporary evidence directories, so an intentional `exit 7` does not pollute the
+job's production receipts. Old receipts are removed after restoring a cache.
+
+Canonical aggregate receipts are written with this repository's `ijson-jcs`,
+plus the estate final LF. Raw tool output is retained alongside them. Failure
+logs are uploaded with `if: always()` and bounded diagnostics are exposed through
+Checks annotations. Evidence artifacts expire after 30 days; retain accepted
+release/baseline receipts through the owner's durable archive mechanism.
+
+=== Deep verification
+
+`deep.yml` schedules weekly and supports manual invocation. It runs two
+300-second fuzz campaigns and production `cargo-mutants` analysis. The mutation
+baseline must pass, the campaign must be nonempty and catch faults, and survivors
+or timeouts fail. Unviable mutants are reported, not counted as caught. There is
+no silent survivor exclusion list. This expensive lane is not represented as
+having run on every PR; inspect its separate run before promotion when relevant.
+
+Replay a fuzz failure with the pinned nightly and `cargo fuzz run TARGET
+fuzz/artifacts/TARGET/CRASH`. Commit a minimized regression test/seed after
+review, not the generated corpus or a manufactured successful receipt.
+
+== Local reproduction
+
+[source,shell]
+----
+cargo test --locked --all-features
+cargo test --locked --release --all-features
+cargo clippy --locked --all-targets --all-features -- -D warnings
+bash scripts/tests/ci-run.sh
+bash scripts/tests/standard-inputs.sh
+bash scripts/ci/benchmarks.sh
+bash scripts/ci/fuzz.sh 30
+bash scripts/ci/mutation.sh
+----
+
+`provision.sh` installs verified Linux/x86_64 yq/actionlint (`yaml`) or also
+Bun/Nickel (`conformance`); put its printed bin directory on PATH when outside
+Actions. Hypatia additionally needs the pinned Elixir/Erlang versions shown in
+CI. Scans are read-only static analysis, not dynamic attacks on external systems.
+
+The agent sandbox cannot download Rust toolchains/release assets from their
+redirected hosts. Compiled evidence is therefore collected on real GitHub-hosted
+runners, not from invented local runs or an unofficial Rust distribution.
+
+== Benchmark history and regression policy
+
+Each measurement uses four frozen v1 workloads, 100 warmups, nine samples and
+2,000 iterations per sample. Checksums must be true. A passing harness control
+suite is not a production timing baseline.
+
+After *at least ten distinct, successful main-push CI runs* exist, use
+`scripts/ci/baseline-proposal.sh RUN_ID ...`. It downloads the actual benchmark
+artifacts, checks run/source/event identity and workload/compiler/runner
+comparability, invokes upstream `compute-bench-baseline.sh`, and writes a
+canonical proposal under `target/ci`. Review it before committing it as
+`.ci/bench-baseline.json`. Select the latest comparable ten runs; do not
+cherry-pick favorable measurements or repeatedly synthesize “historical” files.
+
+The imported upstream gate uses 2.0x leave-one-out ratios and a 2.5x absolute
+backstop. Those tolerances were calibrated for the upstream suite, *not* this
+Rust library; review local runner noise and thresholds before accepting a
+performance claim. The proposal preserves the upstream note but labels its
+provenance. A missing baseline is visible in regular CI and is a hard failure
+for release preparation. Workload or toolchain changes require reviewed
+re-baselining, never automatic acceptance of a slowdown.
+
+== Standards synchronization — issue #7
+
+Ten exact normative inputs are hashed in `.ci/standards.sha256`. Runtime
+conformance only fetches the accepted immutable revision. The scheduled/manual
+`standards-update.yml` resolves a candidate SHA once, runs the Rust suite and
+both accepted/candidate upstream JSON-policy tests against this binary, plus
+independent firing controls. Required missing inputs, modified implementation /
+binary bytes and failed tests stop the proposal. The input lock itself is never
+silently advanced.
+
+The read-only job produces an applicable pin/hash patch and a source/binary /
+toolchain receipt. A *separate*, trusted-main job with only `issues: write`
+opens a deduplicated review issue. It neither creates a branch, commits, signs,
+merges nor publishes the change. The owner applies a reviewed patch through the
+authorised signed mechanism, re-runs all required CI and updates consumers.
+A no-change scan says no change; it is not an end-to-end promotion test.
+
+Issue #7 remains open until a *real new candidate* has produced the automatic
+proposal end to end on main, authorised signed promotion has been verified, and
+kyq's pinned contract/differential corpus is updated and actually executable.
+The unpublished `DATA-FORMAT-ROUTING.adoc` is not fabricated or hashed as an
+accepted dependency. See standards issue #1341 and the upstream prompts.
+
+== Release pipeline — intentionally gated
+
+`release.yml` is triggered only by version tags. It reruns every required lane,
+then requires all of the following before packaging:
+
+* tag equals Cargo's version and points at a commit already in main;
+* annotated tag and source commit have valid GitHub-reported cryptographic
+  verification (no agent pretending to possess the owner's signing key);
+* real `release` environment has required reviewers, self-review prevented,
+  and administrator bypass disabled; missing/unreadable settings fail;
+* the reviewed benchmark baseline exists and the actual benchmark comparison
+  succeeds; clean source and verified Cargo package.
+
+Only after the protected environment approval does the publishing job verify
+transferred checksums, request GitHub build-provenance attestation and create a
+*source-crate draft release*. It does not publish to crates.io or claim native
+binary reproducibility. No tag, release, registry credential or owner affirmation
+is created by this implementation session. Publishing the draft remains an
+owner decision. Do not tag until the owner has accepted the source/version,
+upstream boundaries, benchmark history and required review evidence.
+
+== Owner-side handoff — cannot be inferred from a green run
+
+. Require `Required CI`, CodeRabbit review/conversation resolution and the
+installed security-app contexts on main and merge queue; require fresh approvals
+and CODEOWNERS review. Test a deliberately failing PR. Prevent administrator /
+automation bypass and unsigned promotion through the authorised estate policy.
+. Verify enabled Actions permissions and the exact installed GitGuardian,
+Hypatia, K9/DEED and CodeRabbit integrations. Billing/timeouts/unavailable apps
+are *not* approvals. This branch does not disable an app to obtain green checks.
+. Configure/inspect the `release` environment and immutable protected tags;
+provision the authorised signer outside this agent. Keep private keys out of
+workflow files, chat and the workspace.
+. Give the owner's Squabbler installation its documented Administration:read /
+check access, then run live `verify-satisfied` on the *actual protected follow-up
+PR*. Ordinary GITHUB_TOKEN chain/model checks cannot attest protected gate state.
+. Publish the reviewed standards routing change and complete the AffineScript
+kyq port; then execute the real shared-vector integration and automatic update
+proposal. Preserve archived signed bytes; version canonical-byte migrations.
+. Collect real main benchmark history and retain accepted receipts durably.
+
+The repository-protection/Actions-setting endpoints returned 403 to this
+session; an empty ruleset listing is not proof of absent protection. PR #8 was
+merged externally while checks/review were failing. This agent did not merge
+it. That observed behavior is why owner-side no-bypass validation is essential.
+Historical affirmations have not been edited into an approval of this work.

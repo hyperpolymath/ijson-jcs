@@ -5,9 +5,10 @@ readonly STANDARDS_REV='8e48b1caade08a552646adeab66558ac43b4360d'
 readonly PROVEN_REV='eca682bcd419554f6779e72969902e6faef4fd9d'
 readonly PONS_REV='51b8920f541782ceb9465ea3f0d33c96104fc1fb'
 readonly PANIC_REV='b5530834a839734d1d181bfe6edb0d43d4233cf4'
-# Last pre-regression revision; 9a5db53 does not compile (actions_lock.ex:170).
-# See docs/UPSTREAM-PROMPTS.adoc; do not locally patch or downgrade the scanner.
-readonly HYPATIA_REV='4ae80e378db34f9a7f1fea3654a90ef7d38124e9'
+# Before the actions_lock match regression in 4ae80e3 and current 9a5db53.
+# Same real escript/rules, no patched vendor or fallback wrapper. Known upstream
+# dependency/build debt is explicit in docs/UPSTREAM-PROMPTS.adoc.
+readonly HYPATIA_REV='f7734e327870f8b0622af89c70b9ddbf5a5fc953'
 readonly SQUABBLER_REV='14f853fde902ab2d7631070d87a9dc9122e01013'
 readonly KYQ_REV='4370c7637486fa8d69453d6d4731aaff81a8868b'
 readonly YQ_VERSION='4.53.3'

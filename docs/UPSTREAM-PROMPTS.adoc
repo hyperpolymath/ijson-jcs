@@ -1,0 +1,194 @@
+// SPDX-License-Identifier: CC-BY-SA-4.0
+= Prioritised upstream prompts
+:toc:
+
+These are concrete handoffs, not assertions that upstream fixes exist. Preserve
+each repository's own language, ownership, signing and testing rules. Do not
+copy a weaker local substitute merely to make this consumer green.
+
+== P0 — Hypatia: restore a buildable, tested main
+
+Repository: `hyperpolymath/hypatia`.
+
+----
+Reproduce the downstream build failure at
+9a5db53f3b22bdd3e2a10f430ead5fd8a793711d using Elixir 1.19.4 / OTP 28.3:
+mix deps.get && mix escript.build
+
+lib/rules/actions_lock.ex:170 uses `version in @supported_versions` in a
+case-match position. The compiler rejects invoking :erlang.=:=/2 inside a
+match. The same failure was reproduced at 4ae80e378db34f9a7f1fea3654a90ef7d38124e9.
+Compare the working match/guard structure at
+f7734e327870f8b0622af89c70b9ddbf5a5fc953 and the overlapping changes in
+4ae80e3 / 8f0545ca38329081c1b65451bd7d7050bf0edfb6. Repair the guard/match structure
+without losing v0.0.2/v0.0.3 support, hostname validation or duplicate refusal.
+
+Run the FULL real Mix/escript packaging suite, actions_lock tests, and the
+workflow pin controls. Require the compile and packaging contexts before
+merge, including conflicting concurrent PRs. Do not treat partial standalone
+module tests or a skipped/cancelled build as a main-build pass.
+
+The same downstream build reports plug_crypto 2.2.0 with
+CVE-2026-105963 / GHSA-ffw9-w85g-f2vh (medium). Update the pinned dependency
+with regression tests and verify the new lock; the earlier revisions also
+carry Bandit 1.12.5 with HIGH GHSA-69m6-wcv4-rwcf and MEDIUM
+GHSA-v53v-9hvg-37jf. Upgrade both dependencies and test the real scanner; do not silently resolve an
+uncommitted lock during scanner installation. Publish a tested immutable
+revision and record the consumer upgrade recipe.
+----
+
+Downstream execution evidence:
+https://github.com/hyperpolymath/ijson-jcs/actions/runs/40226784092
+(Hypatia check 121269724811). This branch pins the pre-regression revision and
+runs its real rule tests; it does not patch the vendor checkout or skip Hypatia.
+A pre-regression pin is not proof that current upstream main is healthy. The
+local scan runs without starting the OTP/HTTP server (`--no-start` controls and
+escript `app: nil`); that narrows exposure but does not erase advisory debt.
+
+== P0 — Estate governance: required checks must actually prevent bad merges
+
+Repositories/settings: `hyperpolymath/ijson-jcs`, `hyperpolymath/cicd-suite`,
+`hyperpolymath/cicd-squabbler`, authorised estate protection/signing mechanism.
+
+----
+Audit the effective branch/merge-queue rules for ijson-jcs with an account/App
+that can READ Administration settings. PR #8 was externally merged on
+2026-10-25 at 19:26:02Z while compiled tests failed and CodeRabbit requested
+changes. Preserve the audit trail; do not rewrite the historical affirmation.
+
+Require the new exact `Required CI` context, installed security-app checks,
+fresh CODEOWNERS approval and resolved review conversations. Reject missing,
+skipped, neutral, cancelled and duplicate-name worst-status evidence. Remove
+unjustified bypass actors through the authorised policy, not an agent shortcut.
+Run a deliberately failing protected PR and verify it CANNOT merge. Use
+cicd-squabbler's live verify-satisfied with its required Administration:read
+permission; ordinary chain/model analysis is not that proof. Provision the
+release environment with real reviewers, self-review prevention, no admin
+bypass, immutable tags and the authorised signed promotion path. Return exact
+settings/readback and failed-merge controls, not a screenshot of a green job.
+----
+
+== P1 — Hypatia: KYAML-aware workflow analysis and truthful coverage
+
+----
+The estate requires KYAML flow-style YAML. WorkflowHardening explicitly uses
+regex over YAML text, including column-zero block-style assumptions. Use the
+estate-approved yq parser to produce a semantic workflow tree, preserving
+source locations for reports. Do not add a Python YAML parser or tell consumers
+to abandon KYAML. Add equivalent block/flow/quoted-key/multiline fixtures for
+permissions, SHA-pinned uses, timeout, concurrency, reusable callers, job-level
+write permissions and attacker-controlled run interpolation. Every rule needs
+a clean control AND a firing control in both styles.
+
+Missing yq, unreadable workflow, invalid syntax or a silently unscanned workflow
+must be an operational/incomplete result, never clean. Emit the number of files
+and rules actually evaluated plus schema version and coverage status. Retain
+upstream actions-lock v0.0.3/hostname checks and use real built escripts. Provide
+a tested consumer revision. A local yq/actionlint gate complements Hypatia but
+is not permission to label Hypatia's unsupported syntax fully scanned.
+----
+
+== P1 — Standards: signed routing publication and tested proposals
+
+Repository: `metadatastician/standards`; issue #1341, not PR #1341.
+
+----
+Finish the owner-authorised DATA-FORMAT-ROUTING publication from base
+8e48b1caade08a552646adeab66558ac43b4360d using the authorised signer. The
+prepared tree was 5cbad888409e2f3c8d95f83a943a03e4370a669f; verify it against
+the actual reviewed patch rather than trusting a hash copied from prose.
+Do not forge an owner affirmation or modify archived signed JSON bytes.
+
+Exercise the actual ijson-jcs candidate binary against the JSON policy fixtures,
+including JSON/JSON-LD bytes, nonempty JSONL/NDJSON framing, exactly-one-LF,
+large integer-token refusal, and the finite-float/non-closed strict profile
+counterexample 1e20. Specify versioned migration/consumer behavior explicitly.
+Run the real KYAML formatter with semantic-equivalence and final-LF controls.
+Publish a tested immutable standards SHA, not a floating-main runtime contract.
+
+Then exercise ijson-jcs's standards-update workflow on the REAL published new
+SHA. Inspect the generated pin/hash patch and source/binary/toolchain receipt,
+the automatically opened proposal issue, and authorised signed promotion.
+Missing inputs, incompatible fixtures and unexecutable tools must stay red.
+Record accepted run IDs and update kyq's contract in the same reviewed process.
+This is needed before ijson-jcs issue #7 can truthfully close.
+----
+
+== P1 — kyq / AffineScript: real compiler, host I/O and shared vectors
+
+Repositories: `metadatastician/kyq`, `hyperpolymath/affinescript`.
+
+----
+Continue kyq's STRICT AFFINESCRIPT-ONLY A2-A8 plan at
+4370c7637486fa8d69453d6d4731aaff81a8868b. A1's minimal slice and 3/11 checked
+sources do not establish full compilation, tests, WASM or CLI readiness. Keep
+build/test failing while the remaining source/control-flow/host-I/O work is
+incomplete; never substitute a Rust port, a yq alias or an always-success stub.
+
+Port AST/lexer/parser/query/lint/JCS/I-JSON to the actual pinned compiler and
+supply documented argv/stdin/stdout/stderr imports. Test errors through imported
+modules, not merely standalone parse success. Do not reopen disproved A1 claims
+about multi-segment paths or record literals without a reproducer.
+
+Expose the real check/canon/lint CLI contract and pin the ijson-jcs reference
+revision. Share exact valid/invalid/canonical vectors from tests/rfc8785.rs,
+tests/fixtures/mod.rs and the deterministic binary64 corpus. Require byte equality
+against the real ijson-jcs CLI, including the Appendix B tie
+43143ff3c1cb0959 -> 1424953923781206.2, UTF-16 ordering, strict unsafe integer
+tokens, invalid UTF-8, noncharacters, nested duplicate keys and final-LF/framing
+separation. Missing compiler/runtime/fixtures must fail, not skip. Publish
+build/test/CLI and failing-control receipts before advertising kyq readiness.
+----
+
+== P2 — proven-tests-and-benches: portable consumer contracts, not proof labels
+
+----
+Keep the working proven-bench schema and actual 18-control regression harness.
+Publish a versioned consumer receipt/provenance schema and tests for empty
+campaigns, malformed/truncated reports, wrong tool versions and missing tools.
+A Rust CI receipt is Unproven; do not relabel it Proven because it uses this repo.
+
+Parameterise benchmark tolerance calibration per frozen consumer workload and
+runner population. The current 2.0x/2.5x thresholds and baseline note describe
+upstream Idris measurements, not ijson-jcs. Test distinct real run IDs, >=10
+accepted main runs, matching compiler/workload/hardware metadata, checksum
+truth and signed/approved baseline promotion. Never synthesize timing history.
+
+Repair the documented INTEROP-PANIC-ATTACK proof bridge: wire the actual proof
+command, reject a Refuted aggregate even when the child process exits 0, test
+operational failure as no-check, and publish proof-assistant/tool/source hashes.
+Until then that aggregate must not be offered as a production proof gate.
+----
+
+== P2 — Pons / panic-attack: calibrated consumers and immutable JSON dependency
+
+----
+Maintain schema-versioned scan coverage and validate-report negative controls:
+zero files, unsupported Rust, truncated JSON, missing parser, nonzero child and
+/bin/true stub must never be clean. Preserve skip/coverage detail in full-repo
+inventories and require no skips in the claimed production Rust scope.
+
+panic-attack assail exit 0 means execution, not absence of findings. Provide a
+machine-readable fail-on-unsuppressed-severity policy and paired suppression
+fixtures, preserving every suppressed finding and reason in the raw report.
+Review the older ijson-jcs dependency pin against this implementation's exact
+RFC/large-integer vectors and version canonical-byte changes before upgrading.
+No source/baseline suppression may hide a real High/Critical finding merely to
+make the consumer's gate green.
+----
+
+== P2 — Squabbler: effective protected-PR receipts without excess authority
+
+----
+Keep chains read-only and distinguish it from live verify-satisfied. Document
+the minimal GitHub App permissions for combined legacy protection/rulesets,
+check-suite/status, review and merge-queue evidence. A 403 must yield incomplete,
+not absence of requirements. Test duplicate named contexts, stale SHA evidence,
+neutral/skipped checks, blocked upstream chains and unavailable review Apps.
+
+Emit a versioned receipt that records the protected PR number/head/base,
+source App IDs, required gate set and scope of Administration reads. Keep
+propose/apply limited to documented repairs; do not auto-merge or remove
+requirements to resolve an impasse. Provide a tested KYAML/flow-style chain
+fixture alongside block YAML and a consumable immutable release digest.
+----

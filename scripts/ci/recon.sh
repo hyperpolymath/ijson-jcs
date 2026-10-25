@@ -38,4 +38,8 @@ jq '{files: (.file_statistics | length), unsuppressed: [.weak_points[] | select(
 # Never invent a clean baseline. Tests/scanner context suppressions remain in
 # the raw report; every non-suppressed High/Critical finding blocks this lane.
 jq -e 'all(.weak_points[]; .suppressed == true or (.severity != "High" and .severity != "Critical"))' target/ci/panic-attack.json >/dev/null
+summary=$(jq -c --slurpfile rust target/ci/pons-rust.json '{panic_files:(.file_statistics|length),
+  unsuppressed_high_critical:([.weak_points[]|select(.suppressed != true and (.severity == "High" or .severity == "Critical"))]|length),
+  pons_rust_files:$rust[0].scanned.files,pons_rust_skipped:($rust[0].scanned.skipped|length)}' target/ci/panic-attack.json)
+printf '::notice title=Recon coverage::%s\n' "$summary"
 (( status == 0 && source_status == 0 ))

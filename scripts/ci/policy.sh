@@ -20,7 +20,7 @@ for file in .github/workflows/*.yml; do
     all(.jobs[]; if has("uses") then true else (."timeout-minutes" > 0 and ."timeout-minutes" <= 60) end) and
     all(.jobs[] | .uses?, .steps[]?.uses? | select(. != null);
       test("^[A-Za-z0-9_.-]+/[A-Za-z0-9_./-]+@[0-9a-f]{40}$") or
-      . == "./.github/workflows/ci.yml") and
+      test("^\\./\\.github/workflows/(ci|hypatia-scan|secret-scanner|codeql)\\.yml$")) and
     all(.jobs[] | .steps[]? | select(.uses? | strings | startswith("actions/checkout@"));
       .with."persist-credentials" == false)
   ' "$work/workflow" >/dev/null
@@ -33,6 +33,6 @@ yq -p yaml -o json '.' .github/workflows/ci.yml | jq -e '
   ((.on.pull_request // {}) | has("paths") or has("paths-ignore") or has("branches") | not) and
   ((.on.merge_group // {}) | has("paths") or has("paths-ignore") | not) and
   (.jobs.required.if == "${{ always() }}") and
-  (.jobs.required.needs | sort == (["quality","test","conformance","benchmarks","recon","hypatia","squabble","security","fuzz"] | sort)) and
+  (.jobs.required.needs | sort == (["quality","test","conformance","benchmarks","recon","hypatia","squabble","security","fuzz","secrets","codeql"] | sort)) and
   all(.jobs | to_entries[] | select(.key != "required"); .value.if == null)
 ' >/dev/null

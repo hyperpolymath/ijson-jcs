@@ -26,6 +26,12 @@
     checks: {
       name: "Re-run every required lane",
       uses: "./.github/workflows/ci.yml",
+      permissions: {
+        contents: "read",
+        actions: "read",
+        attestations: "read",
+        security-events: "write",
+      },
     },
     package: {
       name: "Verify signed source and prepare release",

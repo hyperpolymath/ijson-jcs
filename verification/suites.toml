@@ -125,3 +125,28 @@ id = "kyq-runtime"
 upstream = "metadatastician/kyq@4370c7637486fa8d69453d6d4731aaff81a8868b"
 reason = "AffineScript A2-A8 full-tree/host-I/O port incomplete; build/test deliberately fail"
 required_evidence = "real compiler/CLI, shared byte-equal vectors, strict missing-tool controls; no Rust replacement in kyq"
+
+
+[[suite]]
+id = "codeql"
+harness = ".github/workflows/codeql.yml; scripts/ci/codeql-report.sh"
+payload = ["Rust sources", "GitHub Actions workflows"]
+fault_model = "CodeQL security severity >=7, error results, missing rule metadata, empty query result structure"
+controls = "SARIF clean/low/high/unknown-rule/NaN and empty-campaign controls"
+residue = "CodeQL query scope and licensed runtime remain trusted; no formal proof of vulnerability absence"
+
+[[suite]]
+id = "secret-scanner"
+harness = "bash scripts/ci/secret-scan.sh"
+payload = ["working tree", "full available Git history"]
+fault_model = "credential-shaped material including comments and AsciiDoc; a detector that never fires"
+controls = "clean directory and generated dummy-credential comment; both real scan populations gate"
+residue = "pattern detector cannot identify every secret; reports redact values; no external credential validation"
+
+[[suite]]
+id = "scorecard"
+harness = "bash scripts/ci/scorecard.sh"
+payload = ["repository posture"]
+fault_model = "missing/malformed assessment and visible posture deficiencies"
+controls = "digest-verified actual binary; nonempty typed checks; no unknown-to-pass conversion"
+residue = "advisory assessment; -1 checks are unavailable, not passed; no threshold or badge-publication claim"

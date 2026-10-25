@@ -10,7 +10,7 @@ index=${shard%/*}; total=${shard#*/}
 cargo install cargo-mutants --version "$CARGO_MUTANTS_VERSION" --locked
 mkdir -p target/ci
 scope=(--file 'src/**/*.rs' --file 'src/*.rs' --no-shuffle --sharding round-robin --cargo-arg=--locked)
-cargo mutants "${scope[@]}" --list --json > target/ci/mutation-inventory.raw
+cargo mutants "${scope[@]}" --shard 0/1 --list --json > target/ci/mutation-inventory.raw
 cargo mutants "${scope[@]}" --shard "$shard" --list --json > target/ci/mutation-selected.raw
 expected=$(jq -er 'length | select(. > 0)' target/ci/mutation-selected.raw)
 inventory=$(sha256sum target/ci/mutation-inventory.raw); inventory=${inventory%% *}

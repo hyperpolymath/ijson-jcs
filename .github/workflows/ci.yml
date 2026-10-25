@@ -352,60 +352,24 @@
       ],
     },
     hypatia: {
-      name: "Hypatia local rules",
-      runs-on: "ubuntu-24.04",
-      timeout-minutes: 30,
-      steps: [
-        {
-          uses: "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1", # v7.0.1
-          with: {
-            persist-credentials: false,
-          },
-        },
-        {
-          name: "Pinned Rust",
-          run: "rustup show active-toolchain",
-        },
-        {
-          uses: "actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9", # v6.1.0
-          with: {
-            path: "~/.cargo/registry\n~/.cargo/git\ntarget",
-            key: "rust-${{ runner.os }}-${{ github.job }}-${{ env.RUSTUP_TOOLCHAIN || '1.99.1' }}-${{ hashFiles('Cargo.lock', 'rust-toolchain.toml', '.ci/pins.sh') }}",
-          },
-        },
-        {
-          name: "Fresh evidence directory",
-          run: "rm -rf target/ci target/tmp && mkdir -p target/ci",
-        },
-        {
-          name: "Pinned Elixir and Erlang",
-          uses: "erlef/setup-beam@54075bcc5e249e4758d363f27d099f55d843f124", # v1.24.1
-          with: {
-            elixir-version: "1.19.4",
-            otp-version: "28.3",
-          },
-        },
-        {
-          name: "Build and run the real Hypatia scanner",
-          run: "bash scripts/ci/run.sh hypatia bash scripts/ci/hypatia.sh",
-        },
-        {
-          name: "Canonical execution receipts",
-          run: "bash scripts/ci/finalize-evidence.sh",
-          if: "${{ always() }}",
-        },
-        {
-          name: "Retain execution evidence",
-          if: "${{ always() }}",
-          uses: "actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f", # v6.0.0
-          with: {
-            name: "evidence-${{ github.job }}-${{ runner.os }}-${{ env.RUSTUP_TOOLCHAIN || 'pinned' }}",
-            path: "target/ci/",
-            if-no-files-found: "error",
-            retention-days: 30,
-          },
-        },
-      ],
+      uses: "./.github/workflows/hypatia-scan.yml",
+      permissions: {
+        contents: "read",
+      },
+    },
+    secrets: {
+      uses: "./.github/workflows/secret-scanner.yml",
+      permissions: {
+        contents: "read",
+      },
+    },
+    codeql: {
+      uses: "./.github/workflows/codeql.yml",
+      permissions: {
+        contents: "read",
+        actions: "read",
+        security-events: "write",
+      },
     },
     squabble: {
       name: "Squabbler dependency chains",
@@ -579,6 +543,8 @@
         "benchmarks",
         "recon",
         "hypatia",
+        "secrets",
+        "codeql",
         "squabble",
         "security",
         "fuzz",
@@ -588,7 +554,7 @@
       steps: [
         {
           name: "Every mandatory lane must actually succeed",
-          run: "jq -e 'length == 9 and all(.[]; .result == \"success\")' <<< \"$NEEDS\"",
+          run: "jq -e 'length == 11 and all(.[]; .result == \"success\")' <<< \"$NEEDS\"",
           env: {
             NEEDS: "${{ toJSON(needs) }}",
           },

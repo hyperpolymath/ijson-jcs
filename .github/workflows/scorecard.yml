@@ -1,0 +1,89 @@
+# SPDX-License-Identifier: MPL-2.0
+# KYAML content; retain the filename required by GitHub.
+{
+  name: "Scorecard assessment",
+  on: {
+    push: {
+      branches: [
+        "main",
+        "arena/d216802e-ijson-jcs",
+      ],
+    },
+    schedule: [
+      {
+        cron: "29 4 * * 2",
+      },
+    ],
+    workflow_dispatch: {},
+  },
+  permissions: {
+    contents: "read",
+  },
+  concurrency: {
+    group: "scorecard-${{ github.ref }}",
+    cancel-in-progress: true,
+  },
+  defaults: {
+    run: {
+      shell: "bash",
+    },
+  },
+  jobs: {
+    scorecard: {
+      name: "OpenSSF repository posture",
+      runs-on: "ubuntu-24.04",
+      timeout-minutes: 20,
+      steps: [
+        {
+          uses: "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1", # v7.0.1
+          with: {
+            persist-credentials: false,
+          },
+        },
+        {
+          name: "Pinned Rust",
+          run: "rustup show active-toolchain",
+        },
+        {
+          uses: "actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9", # v6.1.0
+          with: {
+            path: "~/.cargo/registry\n~/.cargo/git\ntarget",
+            key: "rust-${{ runner.os }}-${{ github.job }}-${{ env.RUSTUP_TOOLCHAIN || '1.99.1' }}-${{ hashFiles('Cargo.lock', 'rust-toolchain.toml', '.ci/pins.sh') }}",
+          },
+        },
+        {
+          name: "Fresh evidence directory",
+          run: "rm -rf target/ci target/tmp && mkdir -p target/ci",
+        },
+        {
+          name: "Verified Scorecard binary and truthful report",
+          run: "bash scripts/ci/run.sh scorecard bash scripts/ci/scorecard.sh",
+          env: {
+            GH_TOKEN: "${{ github.token }}",
+            GITHUB_AUTH_TOKEN: "${{ github.token }}",
+          },
+        },
+        {
+          name: "Canonical execution receipts",
+          run: "bash scripts/ci/finalize-evidence.sh",
+          if: "${{ always() }}",
+        },
+        {
+          name: "Retain execution evidence",
+          if: "${{ always() }}",
+          uses: "actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f", # v6.0.0
+          with: {
+            name: "evidence-${{ github.job }}-${{ runner.os }}-${{ env.RUSTUP_TOOLCHAIN || 'pinned' }}",
+            path: "target/ci/",
+            if-no-files-found: "error",
+            retention-days: 30,
+          },
+        },
+      ],
+      permissions: {
+        contents: "read",
+        actions: "read",
+      },
+    },
+  },
+}

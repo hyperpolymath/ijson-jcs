@@ -105,6 +105,10 @@ permissions, SHA-pinned uses, timeout, concurrency, reusable callers, job-level
 write permissions and attacker-controlled run interpolation. Every rule needs
 a clean control AND a firing control in both styles.
 
+Concrete runtime example from ijson-jcs: WH013 says release.yml lacks
+contents: write even though the publish JOB has precisely that grant in KYAML.
+Do not "fix" this by broadening workflow-level permissions or abandoning KYAML.
+
 Missing yq, unreadable workflow, invalid syntax or a silently unscanned workflow
 must be an operational/incomplete result, never clean. Emit the number of files
 and rules actually evaluated plus schema version and coverage status. Retain
@@ -216,4 +220,36 @@ source App IDs, required gate set and scope of Administration reads. Keep
 propose/apply limited to documented repairs; do not auto-merge or remove
 requirements to resolve an impasse. Provide a tested KYAML/flow-style chain
 fixture alongside block YAML and a consumable immutable release digest.
+----
+
+== P1 — Mirror capability and security-tool deployment must not be filename theatre
+
+----
+The Hypatia baseline currently requires mirror.yml unconditionally, and reported
+hypatia-scan.yml missing even when a mandatory central CI job actually executed
+the real scanner. Support verifiable reusable/central job routing, and distinguish
+configured capabilities, genuinely missing checks and owner-declared unavailable
+mirrors. ijson-jcs now has real Hypatia/CodeQL/secret-scanner entry points plus a
+real Scorecard assessment; it will not add an empty mirror workflow to hide a
+remaining finding.
+
+For metadatastician/standards mirror-reusable.yml, fix enabled-but-missing-key
+success/no-op behavior and advisory continue-on-error on the actual push. A
+mirror receipt must name source/destination refs and object IDs, verify the
+approved host fingerprint and confirm the remote ref, while failing visibly
+when an enabled mirror could not run. Do not relax remote branch protection or
+force-push by default to manufacture success. Preserve optional/unconfigured
+status as unavailable rather than a passed mirror.
+
+Owner handoff: choose the real target forges for hyperpolymath/ijson-jcs and
+provision approved host identities and least-privilege credentials through the
+authorised mechanism. Only then add a tested pinned mirror caller and validate
+an actual signed-source transfer. No destination, credential, successful backup
+or owner waiver has been invented by this branch.
+
+Also fix the secret-scanner reusable's default-persisted checkout credentials in
+its secondary jobs, the comment-can-never-hold-secrets assumption and the stated
+deleted-AsciiDoc-history gap. Supply clean/firing cases for BOTH working-tree and
+history populations. The local Gitleaks lane does not inherit a broad allowlist
+that hides those controls.
 ----

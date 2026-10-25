@@ -22,7 +22,10 @@ source_status=0
 "$pons" scan src --format json --require-language rust --fail-on-skips --fail-on error > target/ci/pons-rust.raw || source_status=$?
 (( source_status <= 1 )) || { echo 'pons Rust coverage is incomplete' >&2; exit 2; }
 "$pons" validate-report target/ci/pons-rust.raw
-jq -e '.execution.status == "completed" and .scanned.files > 0 and (.scanned.skipped | length) == 0 and (.scanned.coverage_failures | length) == 0' target/ci/pons-rust.raw >/dev/null
+expected_files=()
+while IFS= read -r -d '' file; do expected_files+=("$file"); done < <(git ls-files -z 'src/*.rs')
+(( ${#expected_files[@]} > 0 )) || { echo 'no tracked production Rust' >&2; exit 2; }
+jq -e --argjson expected "${#expected_files[@]}" '.scanned.files == $expected and .execution.status == "completed" and .scanned.files > 0 and (.scanned.skipped | length) == 0 and (.scanned.coverage_failures | length) == 0' target/ci/pons-rust.raw >/dev/null
 "$panic" --quiet assail . --headless --output target/ci/panic-attack.raw > target/ci/panic-attack.stdout
 # assail's exit 0 only means it executed, NOT that no vulnerabilities exist.
 jq -e -s 'length == 1 and (.[0] |

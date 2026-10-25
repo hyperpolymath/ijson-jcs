@@ -424,7 +424,10 @@ mod tests {
             atomic_replace_with(&target, b"new data", work.permissions(), |_| temp.clone())
                 .is_err()
         );
-        assert!(!temp.exists(), "failed replacement leaked its temporary file");
+        assert!(
+            !temp.exists(),
+            "failed replacement leaked its temporary file"
+        );
         assert_eq!(fs::read(target.join("original")).unwrap(), b"keep");
     }
 }

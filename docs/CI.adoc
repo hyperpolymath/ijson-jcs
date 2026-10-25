@@ -18,14 +18,16 @@ permitted. Source and advisory freshness are different concerns.
 
 No `pull_request_target`, broad write token, inherited secrets, automatic merge
 or required-event path skip is used. Only the proposal-publishing job has
-`issues: write`; only the approved draft-release job has publication permissions.
+`issues: write`; only the approved draft-release job has release-publication
+permissions. CodeQL jobs additionally have scoped `security-events: write` for
+security reports, never `contents: write`.
 All jobs have time limits. Dependency updates open reviewed PRs, not promotions.
 
 == Required PR, push and merge-queue workflow
 
 `.github/workflows/ci.yml` runs for PRs, main pushes, merge groups, and explicit
 manual/reusable invocations. The `Required CI` job always executes and requires
-*all nine* lane results to equal `success`; a failure, skip, cancellation or
+*all eleven* lane results to equal `success`; a failure, skip, cancellation or
 missing lane cannot be promoted to green. Configure this exact context as
 required on the forge. A YAML check alone cannot enforce repository protection.
 
@@ -57,6 +59,12 @@ missing-required-check board controls. It never applies an automatic bypass.
 | Audit / coverage | Pinned cargo-audit with recorded fresh RustSec data; actual
 llvm-cov instrumentation, tests and an 85% line-coverage floor. Coverage is not
 path/branch correctness; inline unit-test code can contribute to line coverage.
+| CodeQL | Actual Rust and Actions queries with an explicit SARIF output and
+processing wait. Nonempty rule metadata, calibrated high-severity/error-result
+gates and canonical reports; not simply the analyzer process's exit code.
+| Secrets | Digest-pinned Gitleaks, clean/firing controls, full Git history and
+working-tree scans. Comment/AsciiDoc control included. Reports are redacted;
+there is no broad fixture/documentation allowlist.
 | Fuzz smoke | Pinned nightly/compiler and cargo-fuzz; address-sanitized byte and
 binary64 targets, committed seeds, 30-second bounded campaigns. Nonzero completed
 execution counts are required; lockfiles must remain unchanged.
@@ -74,6 +82,16 @@ plus the estate final LF. Raw tool output is retained alongside them. Failure
 logs are uploaded with `if: always()` and bounded diagnostics are exposed through
 Checks annotations. Evidence artifacts expire after 30 days; retain accepted
 release/baseline receipts through the owner's durable archive mechanism.
+
+`hypatia-scan.yml`, `codeql.yml` and `secret-scanner.yml` are real reusable
+entry points invoked by Required CI, not filename-only placeholders.
+`scorecard.yml` performs a separate scheduled/main/manual repository posture
+assessment with a digest-verified binary (not a mutable Docker tag). Scores of
+-1 remain unavailable, and low scores remain findings; successful collection is
+not a claim of a clean posture. No public badge/dataset publication is enabled.
+Mirroring has not been fabricated: target forges and authorised credentials
+must be selected by the owner, and the current upstream advisory/silent-skip
+behavior needs repair before it can serve as evidence of a completed mirror.
 
 === Deep verification
 

@@ -61,7 +61,7 @@ members or original number tokens that have already been lost.
   serde_json's recursion guard; the boundaries are not promised identical.
 * Error paths retain legacy slash-separated syntax and escaping (`~0`, `~1`).
   Empty segments now survive nesting. The root and a root empty-key component
-  can both display `/`; this API is not an unambiguous location protocol.
+  both have the empty-string spelling; this API is not an unambiguous location protocol.
 
 == CLI and file formats
 

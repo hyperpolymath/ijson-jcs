@@ -90,22 +90,37 @@ impl Drop for PendingFile {
     }
 }
 
+/// Resolve an explicit or implicit parent without falling back across directories.
+fn replacement_parent(path: &Path) -> &Path {
+    path.parent()
+        .filter(|p| !p.as_os_str().is_empty())
+        .unwrap_or(Path::new("."))
+}
+
 /// Replace in the same directory only after a complete, synced write.
-///
-/// This is atomic replacement, not a lock against concurrent/malicious writers.
-/// Ownership, ACLs and extended attributes are not copied; permission bits are.
+/// This is not a concurrent-writer lock; only permission bits are copied.
 fn atomic_replace(path: &Path, bytes: &[u8], permissions: fs::Permissions) -> io::Result<()> {
     static NEXT: AtomicU64 = AtomicU64::new(0);
-    let parent = path
-        .parent()
-        .filter(|p| !p.as_os_str().is_empty())
-        .unwrap_or(Path::new("."));
-    for _ in 0..128 {
-        let temp = parent.join(format!(
+    atomic_replace_with(path, bytes, permissions, |parent| {
+        parent.join(format!(
             ".ijson-jcs.{}.{}.tmp",
             std::process::id(),
             NEXT.fetch_add(1, Ordering::Relaxed)
-        ));
+        ))
+    })
+}
+
+// The name source is injectable so collision and post-write failures can be
+// tested deterministically, without races, permission assumptions or stubs.
+fn atomic_replace_with(
+    path: &Path,
+    bytes: &[u8],
+    permissions: fs::Permissions,
+    mut temporary: impl FnMut(&Path) -> PathBuf,
+) -> io::Result<()> {
+    let parent = replacement_parent(path);
+    for _ in 0..128 {
+        let temp = temporary(parent);
         let mut options = OpenOptions::new();
         options.write(true).create_new(true);
         #[cfg(unix)]
@@ -290,5 +305,126 @@ fn main() -> ExitCode {
             eprintln!("ijson-jcs: cannot write stdout: {error}");
             ExitCode::from(EXIT_INVALID)
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    struct Scratch(PathBuf);
+
+    impl Scratch {
+        fn new() -> Self {
+            static NEXT: AtomicU64 = AtomicU64::new(0);
+            let path = std::env::temp_dir().join(format!(
+                "ijson-jcs-atomic-{}-{}",
+                std::process::id(),
+                NEXT.fetch_add(1, Ordering::Relaxed)
+            ));
+            fs::create_dir(&path).unwrap();
+            Self(path)
+        }
+
+        fn permissions(&self) -> fs::Permissions {
+            let file = self.0.join("permissions");
+            fs::write(&file, b"fixture").unwrap();
+            fs::metadata(file).unwrap().permissions()
+        }
+    }
+
+    impl Drop for Scratch {
+        fn drop(&mut self) {
+            let _ = fs::remove_dir_all(&self.0);
+        }
+    }
+
+    #[test]
+    fn bounded_reads_reject_valid_prefixes_with_oversized_suffixes() {
+        assert_eq!(DEFAULT_MAX_BYTES, 67_108_864);
+        assert_eq!(read_bounded(&b"{}"[..], 2).unwrap(), b"{}");
+        for input in [&b"{} "[..], &b"{}\n"[..], &b"{}garbage"[..]] {
+            let error = read_bounded(input, 2).unwrap_err();
+            assert!(error.to_string().contains("exceeds --max-bytes 2"));
+        }
+        assert!(read_bounded(&b""[..], 0).unwrap().is_empty());
+        assert!(read_bounded(&b" "[..], 0).is_err());
+    }
+
+    #[test]
+    fn canonical_errors_keep_nested_paths_but_do_not_invent_root_paths() {
+        let nested = canonical_form(br#"{"a/b":{"":9007199254740992}}"#).unwrap_err();
+        assert!(nested.ends_with("(at a~1b/)"), "{nested}");
+        let root = canonical_form(b"9007199254740992").unwrap_err();
+        assert!(!root.contains("(at "), "{root}");
+    }
+
+    #[test]
+    fn temporary_parent_is_always_the_replacement_directory() {
+        assert_eq!(replacement_parent(Path::new("file")), Path::new("."));
+        assert_eq!(replacement_parent(Path::new("")), Path::new("."));
+        assert_eq!(replacement_parent(Path::new("dir/file")), Path::new("dir"));
+        assert_eq!(
+            replacement_parent(Path::new("/absolute/file")),
+            Path::new("/absolute")
+        );
+    }
+
+    #[test]
+    fn exclusive_creation_retries_collisions_without_clobbering() {
+        let work = Scratch::new();
+        let occupied = work.0.join("occupied");
+        let target = work.0.join("target");
+        fs::write(&occupied, b"must survive").unwrap();
+        let mut attempts = 0;
+        atomic_replace_with(&target, b"new bytes", work.permissions(), |parent| {
+            assert_eq!(parent, work.0);
+            attempts += 1;
+            parent.join(if attempts == 1 { "occupied" } else { "free" })
+        })
+        .unwrap();
+        assert_eq!(attempts, 2);
+        assert_eq!(fs::read(&occupied).unwrap(), b"must survive");
+        assert_eq!(fs::read(&target).unwrap(), b"new bytes");
+        assert!(!work.0.join("free").exists());
+
+        let mut attempts = 0;
+        let error = atomic_replace_with(&target, b"never written", work.permissions(), |_| {
+            attempts += 1;
+            occupied.clone()
+        })
+        .unwrap_err();
+        assert_eq!(attempts, 128);
+        assert!(error.to_string().contains("unique temporary file"));
+        assert_eq!(fs::read(&target).unwrap(), b"new bytes");
+    }
+
+    #[test]
+    fn non_collision_errors_are_not_retried_or_reclassified() {
+        let work = Scratch::new();
+        let target = work.0.join("missing-parent/target");
+        let mut attempts = 0;
+        let error = atomic_replace_with(&target, b"data", work.permissions(), |parent| {
+            attempts += 1;
+            parent.join("temp")
+        })
+        .unwrap_err();
+        assert_eq!(attempts, 1);
+        assert_eq!(error.kind(), io::ErrorKind::NotFound);
+    }
+
+    #[test]
+    fn failed_rename_cleans_written_temporary_file_and_preserves_destination() {
+        let work = Scratch::new();
+        let target = work.0.join("target");
+        fs::create_dir(&target).unwrap();
+        fs::write(target.join("original"), b"keep").unwrap();
+        let temp = work.0.join("temporary");
+        assert!(
+            atomic_replace_with(&target, b"new data", work.permissions(), |_| temp.clone())
+                .is_err()
+        );
+        assert!(!temp.exists(), "failed replacement leaked its temporary file");
+        assert_eq!(fs::read(target.join("original")).unwrap(), b"keep");
     }
 }

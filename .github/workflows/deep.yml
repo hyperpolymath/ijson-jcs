@@ -32,9 +32,9 @@
   },
   jobs: {
     mutation: {
-      name: "Production mutation analysis",
+      name: "Production mutation shard ${{ matrix.shard }}/16",
       runs-on: "ubuntu-24.04",
-      timeout-minutes: 60,
+      timeout-minutes: 25,
       steps: [
         {
           uses: "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1", # v7.0.1
@@ -55,11 +55,100 @@
         },
         {
           name: "Fresh evidence directory",
-          run: "rm -rf target/ci && mkdir -p target/ci",
+          run: "rm -rf target/ci target/tmp && mkdir -p target/ci",
         },
         {
-          name: "Kill production mutants",
-          run: "bash scripts/ci/run.sh mutation bash scripts/ci/mutation.sh",
+          name: "Inventory and test this shard",
+          run: "bash scripts/ci/run.sh mutation bash scripts/ci/mutation.sh \"$SHARD/16\"",
+          env: {
+            SHARD: "${{ matrix.shard }}",
+          },
+        },
+        {
+          name: "Canonical execution receipts",
+          run: "bash scripts/ci/finalize-evidence.sh",
+          if: "${{ always() }}",
+        },
+        {
+          name: "Retain execution evidence",
+          if: "${{ always() }}",
+          uses: "actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f", # v6.0.0
+          with: {
+            name: "evidence-mutation-${{ matrix.shard }}",
+            path: "target/ci/",
+            if-no-files-found: "error",
+            retention-days: 30,
+          },
+        },
+      ],
+      strategy: {
+        fail-fast: false,
+        max-parallel: 4,
+        matrix: {
+          shard: [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9,
+            10,
+            11,
+            12,
+            13,
+            14,
+            15,
+          ],
+        },
+      },
+    },
+    aggregate: {
+      name: "Complete mutation inventory",
+      runs-on: "ubuntu-24.04",
+      timeout-minutes: 10,
+      steps: [
+        {
+          uses: "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1", # v7.0.1
+          with: {
+            persist-credentials: false,
+          },
+        },
+        {
+          name: "Pinned Rust",
+          run: "rustup show active-toolchain",
+        },
+        {
+          uses: "actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9", # v6.1.0
+          with: {
+            path: "~/.cargo/registry\n~/.cargo/git\ntarget",
+            key: "rust-${{ runner.os }}-${{ github.job }}-${{ env.RUSTUP_TOOLCHAIN || '1.99.1' }}-${{ hashFiles('Cargo.lock', 'rust-toolchain.toml', '.ci/pins.sh') }}",
+          },
+        },
+        {
+          name: "Fresh evidence directory",
+          run: "rm -rf target/ci target/tmp && mkdir -p target/ci",
+        },
+        {
+          uses: "actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131", # v7.0.0
+          with: {
+            pattern: "evidence-mutation-*",
+            path: "target/ci/shards",
+          },
+        },
+        {
+          name: "Verify all 16 disjoint shards and outcomes",
+          run: "bash scripts/ci/run.sh mutation-aggregate bash scripts/ci/mutation-aggregate.sh",
+        },
+        {
+          name: "No failed or missing matrix is promoted",
+          run: "jq -e 'all(.[]; .result == \"success\")' <<< \"$NEEDS\"",
+          env: {
+            NEEDS: "${{ toJSON(needs) }}",
+          },
         },
         {
           name: "Canonical execution receipts",
@@ -78,6 +167,10 @@
           },
         },
       ],
+      needs: [
+        "mutation",
+      ],
+      if: "${{ always() }}",
     },
     fuzz: {
       name: "Extended sanitized fuzzing",
@@ -103,7 +196,7 @@
         },
         {
           name: "Fresh evidence directory",
-          run: "rm -rf target/ci && mkdir -p target/ci",
+          run: "rm -rf target/ci target/tmp && mkdir -p target/ci",
         },
         {
           name: "Longer byte/number campaigns",

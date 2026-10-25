@@ -22,4 +22,7 @@ fi
   echo "fetch-source: wrong origin at $destination" >&2; exit 2;
 }
 git -C "$destination" diff --exit-code --quiet HEAD -- || { echo 'fetch-source: dirty source' >&2; exit 2; }
+[[ -z "$(git -C "$destination" ls-files --others --exclude-standard)" ]] || {
+  echo 'fetch-source: untracked source files' >&2; exit 2;
+}
 printf '%s\n' "$destination"

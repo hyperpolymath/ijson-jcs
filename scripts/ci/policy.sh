@@ -16,7 +16,7 @@ for file in .github/workflows/*.yml; do
   jq -e '
     (.jobs | type == "object" and length > 0) and
     (.on | has("pull_request_target") | not) and
-    (.permissions != "write-all") and
+    (.permissions | type == "object" and all(.[]; . == "read" or . == "none")) and
     all(.jobs[]; if has("uses") then true else (."timeout-minutes" > 0 and ."timeout-minutes" <= 60) end) and
     all(.jobs[] | .uses?, .steps[]?.uses? | select(. != null);
       test("^[A-Za-z0-9_.-]+/[A-Za-z0-9_./-]+@[0-9a-f]{40}$") or

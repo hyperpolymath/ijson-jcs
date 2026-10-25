@@ -19,6 +19,9 @@ case ${1:?usage: provision.sh yaml|conformance} in
     asset rhysd/actionlint "v$ACTIONLINT_VERSION" "actionlint_${ACTIONLINT_VERSION}_linux_amd64.tar.gz" "$ACTIONLINT_SHA256"
     tar -xzf "$work/actionlint_${ACTIONLINT_VERSION}_linux_amd64.tar.gz" -C "$work" actionlint
     install -m 755 "$work/actionlint" "$root/bin/actionlint"
+    asset koalaman/shellcheck "v$SHELLCHECK_VERSION" "shellcheck-v${SHELLCHECK_VERSION}.linux.x86_64.tar.xz" "$SHELLCHECK_SHA256"
+    tar -xJf "$work/shellcheck-v${SHELLCHECK_VERSION}.linux.x86_64.tar.xz" -C "$work" "shellcheck-v$SHELLCHECK_VERSION/shellcheck"
+    install -m 755 "$work/shellcheck-v$SHELLCHECK_VERSION/shellcheck" "$root/bin/shellcheck"
     ;;
   *) echo 'unknown provision group' >&2; exit 2;;
 esac

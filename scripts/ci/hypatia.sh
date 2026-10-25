@@ -26,5 +26,9 @@ jq -e -s 'length == 1 and (.[0] | type == "array" and all(.[];
   ["critical","high","medium","warn","low","info","informational"] | index($s) != null)))' target/ci/hypatia.raw >/dev/null
 bash scripts/ci/canonical-report.sh target/ci/hypatia.raw target/ci/hypatia.json
 jq '.' target/ci/hypatia.json
-jq -e 'all(.[]; .severity != "critical" and .severity != "high")' target/ci/hypatia.json >/dev/null
+summary=$(jq -c --arg root "$PWD/" '[.[] | select(.severity == "critical" or .severity == "high") |
+  {file:((.file // "<repository>") | ltrimstr($root)),rule:(.type // .rule),severity,reason}]' target/ci/hypatia.json)
+summary=${summary//'%'/'%25'}
+printf '::notice title=Hypatia blocking findings::%s\n' "$summary"
+jq -e 'all(.[]; .severity != "critical" and .severity != "high")'  target/ci/hypatia.json >/dev/null
 printf '%s\n' 'Hypatia local rules ran; Dependabot/secret/code-scanning API alert coverage is not claimed by this offline scope.'

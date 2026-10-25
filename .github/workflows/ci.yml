@@ -55,7 +55,7 @@
         },
         {
           name: "Fresh evidence directory",
-          run: "rm -rf target/ci && mkdir -p target/ci",
+          run: "rm -rf target/ci target/tmp && mkdir -p target/ci",
         },
         {
           name: "Install verified YAML tools",
@@ -75,6 +75,10 @@
         {
           name: "Clippy",
           run: "bash scripts/ci/run.sh clippy cargo clippy --locked --all-targets --all-features -- -D warnings",
+        },
+        {
+          name: "Bash syntax and ShellCheck",
+          run: "bash scripts/ci/run.sh shellcheck bash scripts/ci/shellcheck.sh",
         },
         {
           name: "CI wrapper calibration",
@@ -164,7 +168,7 @@
         },
         {
           name: "Fresh evidence directory",
-          run: "rm -rf target/ci && mkdir -p target/ci",
+          run: "rm -rf target/ci target/tmp && mkdir -p target/ci",
         },
         {
           name: "Library, CLI, RFC and property tests",
@@ -220,7 +224,7 @@
         },
         {
           name: "Fresh evidence directory",
-          run: "rm -rf target/ci && mkdir -p target/ci",
+          run: "rm -rf target/ci target/tmp && mkdir -p target/ci",
         },
         {
           name: "Install verified conformance tools",
@@ -275,7 +279,7 @@
         },
         {
           name: "Fresh evidence directory",
-          run: "rm -rf target/ci && mkdir -p target/ci",
+          run: "rm -rf target/ci target/tmp && mkdir -p target/ci",
         },
         {
           name: "Proven-tests benchmark tools and workloads",
@@ -323,7 +327,7 @@
         },
         {
           name: "Fresh evidence directory",
-          run: "rm -rf target/ci && mkdir -p target/ci",
+          run: "rm -rf target/ci target/tmp && mkdir -p target/ci",
         },
         {
           name: "Pinned scanners and report validation",
@@ -371,7 +375,7 @@
         },
         {
           name: "Fresh evidence directory",
-          run: "rm -rf target/ci && mkdir -p target/ci",
+          run: "rm -rf target/ci target/tmp && mkdir -p target/ci",
         },
         {
           name: "Pinned Elixir and Erlang",
@@ -427,7 +431,7 @@
         },
         {
           name: "Fresh evidence directory",
-          run: "rm -rf target/ci && mkdir -p target/ci",
+          run: "rm -rf target/ci target/tmp && mkdir -p target/ci",
         },
         {
           name: "Install the pinned, attested estate Squabbler",
@@ -486,7 +490,7 @@
         },
         {
           name: "Fresh evidence directory",
-          run: "rm -rf target/ci && mkdir -p target/ci",
+          run: "rm -rf target/ci target/tmp && mkdir -p target/ci",
         },
         {
           name: "Supply-chain audit",
@@ -541,7 +545,7 @@
         },
         {
           name: "Fresh evidence directory",
-          run: "rm -rf target/ci && mkdir -p target/ci",
+          run: "rm -rf target/ci target/tmp && mkdir -p target/ci",
         },
         {
           name: "Bounded byte/number fuzzing",

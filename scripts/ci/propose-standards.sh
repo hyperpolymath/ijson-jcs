@@ -25,8 +25,8 @@ source=$(bash scripts/ci/fetch-source.sh "standards-$candidate" "$STANDARDS_REPO
 work=$(mktemp -d); trap 'rm -rf "$work"' EXIT
 mkdir -p "$work/a/.ci" "$work/b/.ci"
 cp .ci/pins.sh .ci/standards.sha256 "$work/a/.ci/"
-grep -qFx "readonly STANDARDS_REV='$STANDARDS_REV'" .ci/pins.sh
-sed "s/^readonly STANDARDS_REV='$STANDARDS_REV'$/readonly STANDARDS_REV='$candidate'/" .ci/pins.sh > "$work/b/.ci/pins.sh"
+grep -qFx "declare -rx STANDARDS_REV='$STANDARDS_REV'" .ci/pins.sh
+sed "s/^declare -rx STANDARDS_REV='$STANDARDS_REV'$/declare -rx STANDARDS_REV='$candidate'/" .ci/pins.sh > "$work/b/.ci/pins.sh"
 while read -r _ path; do
   (cd "$source" && sha256sum "$path")
 done < .ci/standards.sha256 > "$work/b/.ci/standards.sha256"

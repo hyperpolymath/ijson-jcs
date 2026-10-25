@@ -117,7 +117,7 @@ id = "mutation"
 harness = "bash scripts/ci/mutation.sh"
 payload = ["src/**/*.rs", "src/*.rs"]
 fault_model = "cargo-mutants production substitutions, operator/deletion/return-value mutations"
-controls = "unmutated baseline must pass; nonempty campaign and caught mutants required; misses/timeouts fail"
+controls = "unmutated baseline per shard; nonempty campaign; complete 16-shard/source/inventory agreement; misses/timeouts fail"
 residue = "scheduled/manual lane, not every PR; unviable/equivalent mutants require explicit human analysis, not blanket suppression"
 
 [[blocked_capability]]

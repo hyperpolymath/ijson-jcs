@@ -33,7 +33,7 @@ required on the forge. A YAML check alone cannot enforce repository protection.
 |===
 | Lane | Actual work
 | Quality | rustfmt (including fuzz), Clippy warnings-as-errors, package
-verification, wrapper fault controls, actual actionlint, semantic workflow
+verification, wrapper fault controls, actual actionlint/ShellCheck, semantic workflow
 policy with `yq`/`jq`, pinned upstream KYAML formatting.
 | Rust matrix | Linux Rust 1.85 and pinned primary Rust; Windows 2025 and macOS
 15 primary Rust. Library/CLI/integration/doc tests in debug and release, plus
@@ -78,9 +78,13 @@ release/baseline receipts through the owner's durable archive mechanism.
 === Deep verification
 
 `deep.yml` schedules weekly and supports manual invocation. It runs two
-300-second fuzz campaigns and production `cargo-mutants` analysis. The mutation
+300-second fuzz campaigns and production `cargo-mutants` analysis in 16
+deterministic round-robin shards (at most four concurrent). The aggregate checks
+all indices, source/inventory hashes and total coverage before assessing outcomes.
+The mutation
 baseline must pass, the campaign must be nonempty and catch faults, and survivors
-or timeouts fail. Unviable mutants are reported, not counted as caught. There is
+or timeouts fail. Each shard derives its test timeout from the measured baseline
+(5x, minimum 20 seconds); no baseline is skipped. Unviable mutants are reported, not counted as caught. There is
 no silent survivor exclusion list. This expensive lane is not represented as
 having run on every PR; inspect its separate run before promotion when relevant.
 
@@ -197,6 +201,7 @@ kyq port; then execute the real shared-vector integration and automatic update
 proposal. Preserve archived signed bytes; version canonical-byte migrations.
 . Collect real main benchmark history and retain accepted receipts durably.
 
+The release-environment endpoint returned 404 (no readable configuration).
 The repository-protection/Actions-setting endpoints returned 403 to this
 session; an empty ruleset listing is not proof of absent protection. PR #8 was
 merged externally while checks/review were failing. This agent did not merge

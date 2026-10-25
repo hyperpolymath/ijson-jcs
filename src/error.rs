@@ -84,7 +84,7 @@ pub enum ValidationError {
     DuplicateKey {
         /// The duplicate key that was found
         key: String,
-        /// The path to the duplicate key (JSON Pointer format)
+        /// Legacy slash-joined path with escaped segments (not a full JSON Pointer)
         path: String,
     },
 

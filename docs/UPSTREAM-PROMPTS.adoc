@@ -68,6 +68,31 @@ bypass, immutable tags and the authorised signed promotion path. Return exact
 settings/readback and failed-merge controls, not a screenshot of a green job.
 ----
 
+== P0 — Hypatia: distinguish fuzz assertions from production panics
+
+----
+At f7734e327870f8b0622af89c70b9ddbf5a5fc953 the real escript builds and its
+selected upstream controls run, but the consumer scan flags libFuzzer assertion
+unwraps in fuzz/fuzz_targets/{parse,numbers}.rs as HIGH production DoS findings
+(CWE-754). The sanitizer harness must crash when a production invariant breaks;
+suppressing the assertion or hiding it behind another spelling is not a repair.
+
+Make code_safety classify Rust test/fuzz/benchmark entry points using actual
+syntax/Cargo metadata and report the scope. Add paired fixtures: intentional
+fuzz assertion stays visible as harness evidence, while an unchecked unwrap in
+reachable production code MUST still fire. Include inline cfg(test), test-only
+modules, nested manifests and a fake test-looking filename that actually ships
+in production. Do not simply exempt every directory named tests or fuzz.
+Publish a tested immutable revision; the ijson consumer must keep recording the
+raw findings and must not blanket-ignore High/Critical to claim a pass.
+----
+
+Observed consumer run:
+https://github.com/hyperpolymath/ijson-jcs/actions/runs/40228357157
+(Hypatia check 121274559032). Other blocking findings, if present in the full
+report, require their own diagnosis; these two observations are not a global
+allowlist.
+
 == P1 — Hypatia: KYAML-aware workflow analysis and truthful coverage
 
 ----

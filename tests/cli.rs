@@ -53,8 +53,12 @@ fn canon_ok(input: &str) -> String {
 fn temp_file(name: &str, contents: &[u8]) -> PathBuf {
     static COUNTER: AtomicUsize = AtomicUsize::new(0);
     let dir = PathBuf::from(env!("CARGO_TARGET_TMPDIR")).join(format!(
-        "cli-{}-{}",
+        "cli-{}-{}-{}",
         std::process::id(),
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos(),
         COUNTER.fetch_add(1, Ordering::SeqCst)
     ));
     fs::create_dir_all(&dir).unwrap();

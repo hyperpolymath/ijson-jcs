@@ -55,7 +55,7 @@
         },
         {
           name: "Fresh evidence directory",
-          run: "rm -rf target/ci && mkdir -p target/ci",
+          run: "rm -rf target/ci target/tmp && mkdir -p target/ci",
         },
         {
           name: "Build tested pin-change proposal",

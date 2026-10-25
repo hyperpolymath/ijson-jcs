@@ -1,0 +1,122 @@
+// SPDX-License-Identifier: CC-BY-SA-4.0
+= ijson-jcs
+:toc:
+
+A Rust library and command-line tool for deterministic JSON bytes. The estate
+uses this repository for JSON and KYAML for YAML. The canonical output is for
+hashing/signing; this package does not perform cryptographic signing.
+
+== Build and use
+
+Rust 1.85 is the minimum; `rust-toolchain.toml` pins the primary CI toolchain.
+The `std` feature is retained for compatibility; disabling defaults does *not*
+make this a `no_std` crate. It builds an owned `serde_json::Value`, not a
+streaming or zero-copy representation.
+
+[source,shell]
+----
+cargo install --path . --locked
+printf '{"b":2,"a":1}' | ijson-jcs canon
+ijson-jcs check input.json
+ijson-jcs fix -- input.json
+ijson-jcs --max-bytes 1048576 check -- -unusual-name.json
+----
+
+[source,rust]
+----
+use ijson_jcs::{parse_json, to_jcs, JsonMode};
+
+let value = parse_json(r#"{"b":2,"a":1}"#, JsonMode::Canonical)?;
+assert_eq!(to_jcs(&value)?, br#"{"a":1,"b":2}"#);
+# Ok::<(), Box<dyn std::error::Error>>(())
+----
+
+`Loose` uses serde_json parsing and keeps the last repeated object member.
+`Strict` and `Canonical` reject duplicates while parsing, before a `Value`
+can discard that evidence. `validate_i_json(&Value)` cannot recover duplicate
+members or original number tokens that have already been lost.
+
+== Exact profile and compatibility limits
+
+* Names sort by UTF-16 code units, not UTF-8 or Unicode scalar ordering.
+* Strings use minimal JSON escaping; no Unicode normalization is performed.
+  Invalid UTF-8, unpaired surrogates and Unicode noncharacters are rejected.
+* Floating-point output uses `ryu-js`'s ECMAScript shortest representation,
+  including negative zero → `0` and RFC 8785's exponent boundaries/ties.
+* Strict *integer tokens* must fit ±(2^53−1), including tokens too large for
+  `u64`. This is the repository's conservative interoperability profile, not
+  a claim that every mathematically integral binary64 value is in that range.
+  Decimal/exponent tokens are parsed as finite binary64 values. Exact larger
+  integers belong in strings; do not use a loose parse to evade that policy.
+* The profile is deliberately not closed over every floating-point JCS output:
+  `1e20` is accepted as input and canonicalizes to `100000000000000000000`,
+  which strict parsing rejects as an unsafe integer token. `canon` emits those
+  RFC bytes; `fix` refuses to install an output that its own strict checker
+  would reject. This preserves the historical token rule without corrupting
+  a valid input file. Universal strict-parse/JCS idempotence is *not* claimed.
+* Programmatically constructed values are bounded to `MAX_DEPTH = 128`
+  containers before validation/canonicalization. Text parsing also retains
+  serde_json's recursion guard; the boundaries are not promised identical.
+* Error paths retain legacy slash-separated syntax and escaping (`~0`, `~1`).
+  Empty segments now survive nesting. The root and a root empty-key component
+  can both display `/`; this API is not an unambiguous location protocol.
+
+== CLI and file formats
+
+[cols="1,3",options="header"]
+|===
+| Operation | Contract
+| `canon` | One JSON document on stdin; raw JCS bytes on stdout, no added LF.
+| `check` | Accepts exact JCS bytes with zero or one final LF. Exit 1 means
+valid but noncanonical. Exit 2 means invalid/unreadable input, usage, limit or
+write failure. Multiple files are processed and the worst status wins.
+| `fix` | Writes JCS plus one final LF, after a strict-output preflight.
+Refuses symlinks, non-regular/read-only files and Unix hard links.
+|===
+
+The default input limit is 64 MiB per file/stdin; `--max-bytes` changes it.
+OS-native filenames are retained, including non-UTF-8 names on filesystems that
+support them. Filesystem refusals and stdout failures produce errors, not
+successful output or an intentional panic.
+
+`fix` writes an exclusively created temporary file in the same directory,
+copies permission bits, syncs it and renames it over the original. Ordinary
+failures clean up the temporary file. This is *not* an adversarial-writer lock
+or full crash-durability guarantee: ownership, ACLs and extended attributes
+are not preserved, the directory is not fsynced, and abrupt termination may
+leave a temporary file. Use a controlled working tree and backups.
+
+The estate file profile is narrower than raw JCS. Use:
+
+[source,shell]
+----
+IJSON_JCS="$PWD/target/debug/ijson-jcs" \
+  bash scripts/check-estate-json.sh data.json data.jsonld events.jsonl events.ndjson
+----
+
+JSON and JSON-LD require one final LF. JSON-LD is treated as JSON bytes: no
+remote context fetch, RDF normalization or semantic equivalence claim.
+JSONL/NDJSON require nonempty, individually canonical single-line records and
+a final LF; blank lines, CRLF records and multiline records are rejected. An
+empty stream is rejected by this transitional local estate profile.
+
+This checker is not a fake `kyq`. Real KYAML formatting uses the pinned
+standards formatter and Mike Farah's `yq`. The AffineScript kyq port and the
+unsigned standards routing proposal remain separate upstream work.
+
+== Verification and maintenance
+
+* link:docs/CI.adoc[CI, evidence, release gates and owner handoff]
+* link:verification/suites.toml[Harness/payload inventory, fault models and residues]
+* link:docs/UPSTREAM-PROMPTS.adoc[Prioritised upstream implementation prompts]
+* link:AGENTS.md[Contributor/agent boundaries]
+* link:.github/SECURITY.md[Security reporting and supported surface]
+
+RFC vectors, independently checked binary64 output, seeded shrinking
+properties, filesystem tests, fuzzing and mutation analysis remain empirical
+(`Unproven` in proven-tests-and-benches' taxonomy). No formal proof, deployed
+kyq compatibility, or owner affirmation follows from a green job.
+
+The code was forked from the Groove canonicalizer. Existing MPL-2.0/SPDX
+and historical affirmation documents are preserved, not rewritten as approval
+of this work.

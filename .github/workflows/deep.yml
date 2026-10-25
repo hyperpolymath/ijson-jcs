@@ -1,0 +1,131 @@
+# SPDX-License-Identifier: MPL-2.0
+# KYAML content; retain the filename required by GitHub.
+{
+  name: "Deep verification",
+  on: {
+    schedule: [
+      {
+        cron: "41 3 * * 0",
+      },
+    ],
+    workflow_dispatch: {},
+    push: {
+      branches: [
+        "arena/d216802e-ijson-jcs",
+      ],
+    },
+  },
+  permissions: {
+    contents: "read",
+  },
+  concurrency: {
+    group: "deep-${{ github.ref }}",
+    cancel-in-progress: true,
+  },
+  defaults: {
+    run: {
+      shell: "bash",
+    },
+  },
+  env: {
+    CARGO_TERM_COLOR: "never",
+  },
+  jobs: {
+    mutation: {
+      name: "Production mutation analysis",
+      runs-on: "ubuntu-24.04",
+      timeout-minutes: 60,
+      steps: [
+        {
+          uses: "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1", # v7.0.1
+          with: {
+            persist-credentials: false,
+          },
+        },
+        {
+          name: "Pinned Rust",
+          run: "rustup show active-toolchain",
+        },
+        {
+          uses: "actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9", # v6.1.0
+          with: {
+            path: "~/.cargo/registry\n~/.cargo/git\ntarget",
+            key: "rust-${{ runner.os }}-${{ github.job }}-${{ env.RUSTUP_TOOLCHAIN || '1.99.1' }}-${{ hashFiles('Cargo.lock', 'rust-toolchain.toml', '.ci/pins.sh') }}",
+          },
+        },
+        {
+          name: "Fresh evidence directory",
+          run: "rm -rf target/ci && mkdir -p target/ci",
+        },
+        {
+          name: "Kill production mutants",
+          run: "bash scripts/ci/run.sh mutation bash scripts/ci/mutation.sh",
+        },
+        {
+          name: "Canonical execution receipts",
+          run: "bash scripts/ci/finalize-evidence.sh",
+          if: "${{ always() }}",
+        },
+        {
+          name: "Retain execution evidence",
+          if: "${{ always() }}",
+          uses: "actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f", # v6.0.0
+          with: {
+            name: "evidence-${{ github.job }}-${{ runner.os }}-${{ env.RUSTUP_TOOLCHAIN || 'pinned' }}",
+            path: "target/ci/",
+            if-no-files-found: "error",
+            retention-days: 30,
+          },
+        },
+      ],
+    },
+    fuzz: {
+      name: "Extended sanitized fuzzing",
+      runs-on: "ubuntu-24.04",
+      timeout-minutes: 35,
+      steps: [
+        {
+          uses: "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1", # v7.0.1
+          with: {
+            persist-credentials: false,
+          },
+        },
+        {
+          name: "Pinned Rust",
+          run: "rustup show active-toolchain",
+        },
+        {
+          uses: "actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9", # v6.1.0
+          with: {
+            path: "~/.cargo/registry\n~/.cargo/git\ntarget",
+            key: "rust-${{ runner.os }}-${{ github.job }}-${{ env.RUSTUP_TOOLCHAIN || '1.99.1' }}-${{ hashFiles('Cargo.lock', 'rust-toolchain.toml', '.ci/pins.sh') }}",
+          },
+        },
+        {
+          name: "Fresh evidence directory",
+          run: "rm -rf target/ci && mkdir -p target/ci",
+        },
+        {
+          name: "Longer byte/number campaigns",
+          run: "bash scripts/ci/run.sh fuzz bash scripts/ci/fuzz.sh 300",
+        },
+        {
+          name: "Canonical execution receipts",
+          run: "bash scripts/ci/finalize-evidence.sh",
+          if: "${{ always() }}",
+        },
+        {
+          name: "Retain execution evidence",
+          if: "${{ always() }}",
+          uses: "actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f", # v6.0.0
+          with: {
+            name: "evidence-${{ github.job }}-${{ runner.os }}-${{ env.RUSTUP_TOOLCHAIN || 'pinned' }}",
+            path: "target/ci/",
+            if-no-files-found: "error",
+            retention-days: 30,
+          },
+        },
+      ],
+    },
+  },
+}

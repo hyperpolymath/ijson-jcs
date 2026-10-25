@@ -57,6 +57,11 @@ fn main() {
         "subject": "ijson-jcs", "workload_revision": 1,
         "commit": std::env::var("GITHUB_SHA").unwrap_or_else(|_| "local-unattested".into()),
         "runner": std::env::var("RUNNER_OS").unwrap_or_else(|_| std::env::consts::OS.into()),
+        "runner_arch": std::env::var("RUNNER_ARCH").unwrap_or_else(|_| std::env::consts::ARCH.into()),
+        "run_id": std::env::var("GITHUB_RUN_ID").unwrap_or_default(),
+        "event": std::env::var("GITHUB_EVENT_NAME").unwrap_or_default(),
+        "ref": std::env::var("GITHUB_REF").unwrap_or_default(),
+        "rustc": std::env::var("IJSON_RUSTC_VERSION").unwrap_or_default(),
         "results": results,
     });
     let mut bytes = to_jcs(&report).unwrap();

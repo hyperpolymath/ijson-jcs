@@ -2,45 +2,22 @@
 //! Copyright (c) 2026 Hyperpolymath Estate
 //!
 //! I-JSON (RFC 7493) validator + JCS (RFC 8785) canonicalizer
-//
-// # Overview
-//
-// This crate provides **elegant, correct** JSON handling for scenarios requiring:
-// - **Interoperability**: I-JSON compliance (RFC 7493)
-// - **Determinism**: JCS canonicalization (RFC 8785)
-// - **Safety**: Validation of JSON data before hashing, signing, or storage
-//
-// # Design Principles
-//
-// 1. **Correctness First**: Strict adherence to RFC specifications
-// 2. **Elegance**: Clean, minimal APIs that are intuitive to use
-// 3. **Dual-Mode**: Support both loose parsing (compatibility) and strict modes
-// 4. **Deterministic**: JCS output is byte-for-byte identical for same input
-// 5. **Zero-Copy**: Minimize allocations where possible
-//
-// # Fork Relationship
-//
-// This implementation is **forked and enhanced** from the excellent
-// `meta-repos/groove/cli/src/canonical.rs` implementation, which was already
-// RFC 8785 compliant for the Groove use case. We've generalized it to:
-// - Support full I-JSON validation (duplicate keys, Unicode safety, etc.)
-// - Handle all JSON number types (not just integers)
-// - Provide a comprehensive, unified API
-// - Add extensive test coverage
-//
-// # Usage
-//
-// ```rust
-// use ijson_jcs::{JsonMode, parse_json, to_jcs, validate_i_json};
-// use serde_json::json;
-//
-// // Parse with I-JSON validation
-// let value = parse_json(r#"{"b": 1, "a": 2}"#, JsonMode::Strict)?;
-//
-// // Canonicalize to JCS (deterministic bytes)
-// let canonical_bytes = to_jcs(&value)?;
-// // canonical_bytes == b"{\"a\":2,\"b\":1}"
-// ```
+//!
+//! Owned JSON parsing and deterministic JCS bytes. Strict modes reject
+//! duplicate keys, noncharacters, non-finite numbers and integer tokens
+//! outside ±(2^53−1). Loose mode retains serde_json's last-key-wins behavior.
+//!
+//! This conservative integer-token profile is not closed over every finite
+//! float's canonical spelling: `1e20` renders as an unsafe bare integer.
+//! See the README for that boundary, file framing and resource limits.
+//! The crate is not zero-copy, streaming, `no_std`, or formally verified.
+//!
+//! ```
+//! use ijson_jcs::{parse_json, to_jcs, JsonMode};
+//! let value = parse_json(r#"{"b":2,"a":1}"#, JsonMode::Canonical)?;
+//! assert_eq!(to_jcs(&value)?, br#"{"a":1,"b":2}"#);
+//! # Ok::<(), Box<dyn std::error::Error>>(())
+//! ```
 
 #![forbid(unsafe_code)]
 #![warn(missing_docs)]

@@ -1,0 +1,127 @@
+# SPDX-License-Identifier: MPL-2.0
+# KYAML content; retain the filename required by GitHub.
+{
+  name: "Standards update proposal",
+  on: {
+    schedule: [
+      {
+        cron: "17 6 * * 1",
+      },
+    ],
+    workflow_dispatch: {
+      inputs: {
+        revision: {
+          description: "Candidate full SHA; blank resolves main once",
+          type: "string",
+          required: false,
+        },
+      },
+    },
+  },
+  permissions: {
+    contents: "read",
+  },
+  concurrency: {
+    group: "standards-proposal",
+    cancel-in-progress: false,
+  },
+  defaults: {
+    run: {
+      shell: "bash",
+    },
+  },
+  jobs: {
+    proposal: {
+      name: "Test accepted and candidate standards",
+      runs-on: "ubuntu-24.04",
+      timeout-minutes: 30,
+      steps: [
+        {
+          uses: "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1", # v7.0.1
+          with: {
+            persist-credentials: false,
+          },
+        },
+        {
+          name: "Pinned Rust",
+          run: "rustup show active-toolchain",
+        },
+        {
+          uses: "actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9", # v6.1.0
+          with: {
+            path: "~/.cargo/registry\n~/.cargo/git\ntarget",
+            key: "rust-${{ runner.os }}-${{ github.job }}-${{ env.RUSTUP_TOOLCHAIN || '1.99.1' }}-${{ hashFiles('Cargo.lock', 'rust-toolchain.toml', '.ci/pins.sh') }}",
+          },
+        },
+        {
+          name: "Fresh evidence directory",
+          run: "rm -rf target/ci && mkdir -p target/ci",
+        },
+        {
+          name: "Build tested pin-change proposal",
+          run: "bash scripts/ci/run.sh standards-proposal bash scripts/ci/propose-standards.sh",
+          id: "proposal",
+          env: {
+            GH_TOKEN: "${{ github.token }}",
+            CANDIDATE_REVISION: "${{ inputs.revision }}",
+          },
+        },
+        {
+          name: "Canonical execution receipts",
+          run: "bash scripts/ci/finalize-evidence.sh",
+          if: "${{ always() }}",
+        },
+        {
+          name: "Retain execution evidence",
+          if: "${{ always() }}",
+          uses: "actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f", # v6.0.0
+          with: {
+            name: "evidence-${{ github.job }}-${{ runner.os }}-${{ env.RUSTUP_TOOLCHAIN || 'pinned' }}",
+            path: "target/ci/",
+            if-no-files-found: "error",
+            retention-days: 30,
+          },
+        },
+      ],
+      outputs: {
+        changed: "${{ steps.proposal.outputs.changed }}",
+        candidate: "${{ steps.proposal.outputs.candidate }}",
+      },
+    },
+    publish: {
+      name: "Publish tested proposal, never promote pins",
+      needs: [
+        "proposal",
+      ],
+      if: "${{ needs.proposal.outputs.changed == 'true' && github.ref == 'refs/heads/main' }}",
+      runs-on: "ubuntu-24.04",
+      timeout-minutes: 5,
+      permissions: {
+        contents: "read",
+        issues: "write",
+      },
+      steps: [
+        {
+          uses: "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1", # v7.0.1
+          with: {
+            persist-credentials: false,
+          },
+        },
+        {
+          uses: "actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131", # v7.0.0
+          with: {
+            name: "evidence-proposal-Linux-pinned",
+            path: "target/ci",
+          },
+        },
+        {
+          name: "Open deduplicated review issue",
+          run: "bash scripts/ci/publish-proposal.sh target/ci/proposal/receipt.json",
+          env: {
+            GH_TOKEN: "${{ github.token }}",
+          },
+        },
+      ],
+    },
+  },
+}

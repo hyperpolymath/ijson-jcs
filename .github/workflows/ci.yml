@@ -50,7 +50,7 @@
           uses: "actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9", # v6.1.0
           with: {
             path: "~/.cargo/registry\n~/.cargo/git\ntarget",
-            key: "rust-${{ runner.os }}-${{ github.job }}-${{ matrix.toolchain || '1.99.1' }}-${{ hashFiles('Cargo.lock', 'rust-toolchain.toml', '.ci/pins.sh') }}",
+            key: "rust-${{ runner.os }}-${{ github.job }}-${{ env.RUSTUP_TOOLCHAIN || '1.99.1' }}-${{ hashFiles('Cargo.lock', 'rust-toolchain.toml', '.ci/pins.sh') }}",
           },
         },
         {
@@ -71,6 +71,10 @@
         {
           name: "Rust formatting",
           run: "bash scripts/ci/run.sh format cargo fmt --all -- --check",
+        },
+        {
+          name: "Fuzz target formatting",
+          run: "bash scripts/ci/run.sh fuzz-format cargo fmt --manifest-path fuzz/Cargo.toml --all -- --check",
         },
         {
           name: "Clippy",
@@ -98,7 +102,7 @@
           if: "${{ always() }}",
           uses: "actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f", # v6.0.0
           with: {
-            name: "evidence-${{ github.job }}-${{ matrix.os || runner.os }}-${{ matrix.toolchain || 'pinned' }}",
+            name: "evidence-${{ github.job }}-${{ runner.os }}-${{ env.RUSTUP_TOOLCHAIN || 'pinned' }}",
             path: "target/ci/",
             if-no-files-found: "error",
             retention-days: 30,
@@ -151,7 +155,7 @@
           uses: "actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9", # v6.1.0
           with: {
             path: "~/.cargo/registry\n~/.cargo/git\ntarget",
-            key: "rust-${{ runner.os }}-${{ github.job }}-${{ matrix.toolchain || '1.99.1' }}-${{ hashFiles('Cargo.lock', 'rust-toolchain.toml', '.ci/pins.sh') }}",
+            key: "rust-${{ runner.os }}-${{ github.job }}-${{ env.RUSTUP_TOOLCHAIN || '1.99.1' }}-${{ hashFiles('Cargo.lock', 'rust-toolchain.toml', '.ci/pins.sh') }}",
           },
         },
         {
@@ -180,7 +184,7 @@
           if: "${{ always() }}",
           uses: "actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f", # v6.0.0
           with: {
-            name: "evidence-${{ github.job }}-${{ matrix.os || runner.os }}-${{ matrix.toolchain || 'pinned' }}",
+            name: "evidence-${{ github.job }}-${{ runner.os }}-${{ env.RUSTUP_TOOLCHAIN || 'pinned' }}",
             path: "target/ci/",
             if-no-files-found: "error",
             retention-days: 30,
@@ -207,7 +211,7 @@
           uses: "actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9", # v6.1.0
           with: {
             path: "~/.cargo/registry\n~/.cargo/git\ntarget",
-            key: "rust-${{ runner.os }}-${{ github.job }}-${{ matrix.toolchain || '1.99.1' }}-${{ hashFiles('Cargo.lock', 'rust-toolchain.toml', '.ci/pins.sh') }}",
+            key: "rust-${{ runner.os }}-${{ github.job }}-${{ env.RUSTUP_TOOLCHAIN || '1.99.1' }}-${{ hashFiles('Cargo.lock', 'rust-toolchain.toml', '.ci/pins.sh') }}",
           },
         },
         {
@@ -235,7 +239,7 @@
           if: "${{ always() }}",
           uses: "actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f", # v6.0.0
           with: {
-            name: "evidence-${{ github.job }}-${{ matrix.os || runner.os }}-${{ matrix.toolchain || 'pinned' }}",
+            name: "evidence-${{ github.job }}-${{ runner.os }}-${{ env.RUSTUP_TOOLCHAIN || 'pinned' }}",
             path: "target/ci/",
             if-no-files-found: "error",
             retention-days: 30,
@@ -262,7 +266,7 @@
           uses: "actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9", # v6.1.0
           with: {
             path: "~/.cargo/registry\n~/.cargo/git\ntarget",
-            key: "rust-${{ runner.os }}-${{ github.job }}-${{ matrix.toolchain || '1.99.1' }}-${{ hashFiles('Cargo.lock', 'rust-toolchain.toml', '.ci/pins.sh') }}",
+            key: "rust-${{ runner.os }}-${{ github.job }}-${{ env.RUSTUP_TOOLCHAIN || '1.99.1' }}-${{ hashFiles('Cargo.lock', 'rust-toolchain.toml', '.ci/pins.sh') }}",
           },
         },
         {
@@ -283,7 +287,7 @@
           if: "${{ always() }}",
           uses: "actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f", # v6.0.0
           with: {
-            name: "evidence-${{ github.job }}-${{ matrix.os || runner.os }}-${{ matrix.toolchain || 'pinned' }}",
+            name: "evidence-${{ github.job }}-${{ runner.os }}-${{ env.RUSTUP_TOOLCHAIN || 'pinned' }}",
             path: "target/ci/",
             if-no-files-found: "error",
             retention-days: 30,
@@ -310,7 +314,7 @@
           uses: "actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9", # v6.1.0
           with: {
             path: "~/.cargo/registry\n~/.cargo/git\ntarget",
-            key: "rust-${{ runner.os }}-${{ github.job }}-${{ matrix.toolchain || '1.99.1' }}-${{ hashFiles('Cargo.lock', 'rust-toolchain.toml', '.ci/pins.sh') }}",
+            key: "rust-${{ runner.os }}-${{ github.job }}-${{ env.RUSTUP_TOOLCHAIN || '1.99.1' }}-${{ hashFiles('Cargo.lock', 'rust-toolchain.toml', '.ci/pins.sh') }}",
           },
         },
         {
@@ -331,7 +335,7 @@
           if: "${{ always() }}",
           uses: "actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f", # v6.0.0
           with: {
-            name: "evidence-${{ github.job }}-${{ matrix.os || runner.os }}-${{ matrix.toolchain || 'pinned' }}",
+            name: "evidence-${{ github.job }}-${{ runner.os }}-${{ env.RUSTUP_TOOLCHAIN || 'pinned' }}",
             path: "target/ci/",
             if-no-files-found: "error",
             retention-days: 30,
@@ -358,7 +362,7 @@
           uses: "actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9", # v6.1.0
           with: {
             path: "~/.cargo/registry\n~/.cargo/git\ntarget",
-            key: "rust-${{ runner.os }}-${{ github.job }}-${{ matrix.toolchain || '1.99.1' }}-${{ hashFiles('Cargo.lock', 'rust-toolchain.toml', '.ci/pins.sh') }}",
+            key: "rust-${{ runner.os }}-${{ github.job }}-${{ env.RUSTUP_TOOLCHAIN || '1.99.1' }}-${{ hashFiles('Cargo.lock', 'rust-toolchain.toml', '.ci/pins.sh') }}",
           },
         },
         {
@@ -387,7 +391,7 @@
           if: "${{ always() }}",
           uses: "actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f", # v6.0.0
           with: {
-            name: "evidence-${{ github.job }}-${{ matrix.os || runner.os }}-${{ matrix.toolchain || 'pinned' }}",
+            name: "evidence-${{ github.job }}-${{ runner.os }}-${{ env.RUSTUP_TOOLCHAIN || 'pinned' }}",
             path: "target/ci/",
             if-no-files-found: "error",
             retention-days: 30,
@@ -414,7 +418,7 @@
           uses: "actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9", # v6.1.0
           with: {
             path: "~/.cargo/registry\n~/.cargo/git\ntarget",
-            key: "rust-${{ runner.os }}-${{ github.job }}-${{ matrix.toolchain || '1.99.1' }}-${{ hashFiles('Cargo.lock', 'rust-toolchain.toml', '.ci/pins.sh') }}",
+            key: "rust-${{ runner.os }}-${{ github.job }}-${{ env.RUSTUP_TOOLCHAIN || '1.99.1' }}-${{ hashFiles('Cargo.lock', 'rust-toolchain.toml', '.ci/pins.sh') }}",
           },
         },
         {
@@ -442,7 +446,7 @@
           if: "${{ always() }}",
           uses: "actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f", # v6.0.0
           with: {
-            name: "evidence-${{ github.job }}-${{ matrix.os || runner.os }}-${{ matrix.toolchain || 'pinned' }}",
+            name: "evidence-${{ github.job }}-${{ runner.os }}-${{ env.RUSTUP_TOOLCHAIN || 'pinned' }}",
             path: "target/ci/",
             if-no-files-found: "error",
             retention-days: 30,
@@ -473,7 +477,7 @@
           uses: "actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9", # v6.1.0
           with: {
             path: "~/.cargo/registry\n~/.cargo/git\ntarget",
-            key: "rust-${{ runner.os }}-${{ github.job }}-${{ matrix.toolchain || '1.99.1' }}-${{ hashFiles('Cargo.lock', 'rust-toolchain.toml', '.ci/pins.sh') }}",
+            key: "rust-${{ runner.os }}-${{ github.job }}-${{ env.RUSTUP_TOOLCHAIN || '1.99.1' }}-${{ hashFiles('Cargo.lock', 'rust-toolchain.toml', '.ci/pins.sh') }}",
           },
         },
         {
@@ -501,7 +505,55 @@
           if: "${{ always() }}",
           uses: "actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f", # v6.0.0
           with: {
-            name: "evidence-${{ github.job }}-${{ matrix.os || runner.os }}-${{ matrix.toolchain || 'pinned' }}",
+            name: "evidence-${{ github.job }}-${{ runner.os }}-${{ env.RUSTUP_TOOLCHAIN || 'pinned' }}",
+            path: "target/ci/",
+            if-no-files-found: "error",
+            retention-days: 30,
+          },
+        },
+      ],
+    },
+    fuzz: {
+      name: "Sanitized fuzz smoke",
+      runs-on: "ubuntu-24.04",
+      timeout-minutes: 25,
+      steps: [
+        {
+          uses: "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1", # v7.0.1
+          with: {
+            persist-credentials: false,
+          },
+        },
+        {
+          name: "Pinned Rust",
+          run: "rustup show active-toolchain",
+        },
+        {
+          uses: "actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9", # v6.1.0
+          with: {
+            path: "~/.cargo/registry\n~/.cargo/git\ntarget",
+            key: "rust-${{ runner.os }}-${{ github.job }}-${{ env.RUSTUP_TOOLCHAIN || '1.99.1' }}-${{ hashFiles('Cargo.lock', 'rust-toolchain.toml', '.ci/pins.sh') }}",
+          },
+        },
+        {
+          name: "Fresh evidence directory",
+          run: "rm -rf target/ci && mkdir -p target/ci",
+        },
+        {
+          name: "Bounded byte/number fuzzing",
+          run: "bash scripts/ci/run.sh fuzz bash scripts/ci/fuzz.sh 30",
+        },
+        {
+          name: "Canonical execution receipts",
+          run: "bash scripts/ci/finalize-evidence.sh",
+          if: "${{ always() }}",
+        },
+        {
+          name: "Retain execution evidence",
+          if: "${{ always() }}",
+          uses: "actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f", # v6.0.0
+          with: {
+            name: "evidence-${{ github.job }}-${{ runner.os }}-${{ env.RUSTUP_TOOLCHAIN || 'pinned' }}",
             path: "target/ci/",
             if-no-files-found: "error",
             retention-days: 30,
@@ -521,13 +573,14 @@
         "hypatia",
         "squabble",
         "security",
+        "fuzz",
       ],
       runs-on: "ubuntu-24.04",
       timeout-minutes: 5,
       steps: [
         {
           name: "Every mandatory lane must actually succeed",
-          run: "jq -e 'length == 8 and all(.[]; .result == \"success\")' <<< \"$NEEDS\"",
+          run: "jq -e 'length == 9 and all(.[]; .result == \"success\")' <<< \"$NEEDS\"",
           env: {
             NEEDS: "${{ toJSON(needs) }}",
           },

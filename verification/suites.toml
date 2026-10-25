@@ -1,0 +1,127 @@
+# SPDX-License-Identifier: CC-BY-SA-4.0
+# Empirical registration, not a proof manifest or a claim of completed runs.
+schema_version = 1
+subject = "ijson-jcs"
+provenance = "Unproven"
+doctrine_source = "hyperpolymath/proven-tests-and-benches@eca682bcd419554f6779e72969902e6faef4fd9d"
+execution_receipts = "target/ci/executions.json"
+
+[[suite]]
+id = "rfc-and-profile"
+harness = "cargo test --locked --all-features"
+payload = ["src/*::tests", "tests/rfc8785.rs", "tests/conformance.rs"]
+fault_model = "wrong binary64 spelling, UTF-16 order/escaping, duplicates, unsafe tokens, noncharacters, lost empty path segments, excess depth"
+controls = "ten clean/fault fixture pairs; exact Appendix B expected bytes; profile closure counterexample"
+residue = "bounded examples; legacy slash-path ambiguity; not all RFC behaviors formally established"
+
+[[suite]]
+id = "cli"
+harness = "cargo test --locked --test cli"
+payload = ["src/bin/ijson-jcs.rs"]
+fault_model = "unsafe replacement, bad exit status/framing, unsupported OS names, size-limit boundary, stdout failure"
+controls = "canonical/noncanonical/invalid; links/read-only; idempotence; permissions; APFS refusal and Linux byte names"
+residue = "no adversarial-writer locking, ACL/xattr/ownership guarantee, abrupt-crash or power-loss fault injection"
+
+[[suite]]
+id = "properties"
+harness = "cargo test --locked --test properties"
+payload = ["tests/properties.rs"]
+seed = "0x494a534f4e4a4353"
+cases_per_property = 512
+fault_model = "non-idempotence within the closed strict numeric subset, whitespace sensitivity, duplicate acceptance, byte-input panic"
+controls = "bounded recursive generators with proptest shrinking; duplicate firing control in strict/canonical vs loose"
+residue = "bounded depth/size and numeric subset; sampled, not universal"
+
+[[suite]]
+id = "binary64-oracle"
+harness = "cargo run --locked --example number_corpus; bun tests/fixtures/ecmascript-oracle.mjs target/ci/number-corpus.jsonl"
+payload = ["src/jcs.rs", "examples/number_corpus.rs"]
+fault_model = "shortest decimal tie/exponent/sign errors"
+controls = "exact float bits and expected ECMAScript JSON.stringify; >19000 finite candidates required"
+residue = "20000 seeded candidates are not all 2^64 representations; Bun/JSC is another trusted implementation"
+
+[[suite]]
+id = "standards-and-framing"
+harness = "bash scripts/ci/standards.sh"
+payload = ["scripts/check-estate-json.sh", "scripts/ci/standard-inputs.sh"]
+fault_model = "missing/stale normative inputs, no-op upstream validator, missing LF, blank/CRLF/multiline streams, JSON-LD context fetching"
+controls = "pinned upstream tests plus independent clean/firing contract controls and local four-format fixtures"
+residue = "routing is transitional; no deployed kyq or unpublished DATA-FORMAT-ROUTING policy claimed"
+
+[[suite]]
+id = "k9-deed"
+harness = "bash scripts/ci/conformance.sh"
+payload = ["0-AI-MANIFEST.deed", "ci.k9.ncl"]
+fault_model = "malformed DEED grammar, invalid Nickel contract, missing semantic tool"
+controls = "real upstream self-tests and clean/fault fixtures; strict K9 L2 on this component"
+residue = "K9 L0-L2 only; no L3 signature or deployment authorization"
+
+[[suite]]
+id = "ci-harness"
+harness = "bash scripts/tests/ci-run.sh"
+payload = ["scripts/ci/run.sh"]
+fault_model = "empty command false pass, swallowed failure/timeout, missing executable, bad log path"
+controls = "0/7/2/127/124 and output-directory failure; receipt and argv assertions"
+residue = "runtime log capture is empirical and the runner/provider remains trusted"
+
+[[suite]]
+id = "benchmarks"
+harness = "bash scripts/ci/benchmarks.sh"
+payload = ["benches/jcs.rs"]
+fault_model = "broken workload checksum; timing outlier/regression relative to accepted history"
+controls = "actual upstream 18-control regression harness; four checksum workloads, 100 warmups, nine measured repetitions"
+residue = "timing regression is NOT RUN until ten genuine accepted main-run receipts form a reviewed baseline"
+
+[[suite]]
+id = "static-recon"
+harness = "bash scripts/ci/recon.sh"
+payload = ["repository inventory", "all src Rust files"]
+fault_model = "unsupported/unscanned production files, malformed reports, unsuppressed High/Critical panic-attack findings"
+controls = "Pons validate-report, require-language rust, production fail-on-skips; schema/severity assertions"
+residue = "static heuristics; repository-wide unsupported languages remain visible; not proof of absence"
+
+[[suite]]
+id = "hypatia"
+harness = "bash scripts/ci/hypatia.sh"
+payload = ["root_hygiene", "honest_completion", "workflow_audit", "workflow_hardening", "cicd_rules", "code_safety", "content_patterns"]
+fault_model = "estate rule violations or scanner/build/report failure"
+controls = "real Mix/escript, pinned upstream rule tests, explicit severity gate (not --exit-zero as acceptance)"
+residue = "seven local modules only; no forge-alert coverage; upstream latest compilation/KYAML deficiencies are tracked"
+
+[[suite]]
+id = "squabbler"
+harness = "bash scripts/ci/squabble.sh"
+payload = ["live dependency chains", "clean and missing-gate board models"]
+fault_model = "upstream chain blockage, omitted required context, unsupported check authorization"
+controls = "official pinned/attested binary; known clean model succeeds and missing required gate must fail"
+residue = "read-only chain/model evidence is NOT verify-satisfied for a protected PR; Administration:read still required"
+
+[[suite]]
+id = "coverage-and-audit"
+harness = "bash scripts/ci/audit.sh; bash scripts/ci/coverage.sh"
+payload = ["Cargo.lock", "instrumented production Rust"]
+fault_model = "known advisory, uncovered production lines below 85 percent"
+controls = "real RustSec database revision captured; cargo-llvm-cov executes tests with instrumentation"
+residue = "coverage is not correctness; advisory knowledge is time-bound"
+
+[[suite]]
+id = "fuzz"
+harness = "bash scripts/ci/fuzz.sh 30"
+payload = ["fuzz/fuzz_targets/parse.rs", "fuzz/fuzz_targets/numbers.rs"]
+fault_model = "panic, malformed canonical JSON, number round-trip failure, sanitizer violation"
+controls = "committed clean/fault seeds; completed nonzero-execution campaign required; locked preflight and unchanged locks"
+residue = "bounded time/size/memory; randomized exploration, not exhaustive; nightly campaign is separate"
+
+[[suite]]
+id = "mutation"
+harness = "bash scripts/ci/mutation.sh"
+payload = ["src/**/*.rs", "src/*.rs"]
+fault_model = "cargo-mutants production substitutions, operator/deletion/return-value mutations"
+controls = "unmutated baseline must pass; nonempty campaign and caught mutants required; misses/timeouts fail"
+residue = "scheduled/manual lane, not every PR; unviable/equivalent mutants require explicit human analysis, not blanket suppression"
+
+[[blocked_capability]]
+id = "kyq-runtime"
+upstream = "metadatastician/kyq@4370c7637486fa8d69453d6d4731aaff81a8868b"
+reason = "AffineScript A2-A8 full-tree/host-I/O port incomplete; build/test deliberately fail"
+required_evidence = "real compiler/CLI, shared byte-equal vectors, strict missing-tool controls; no Rust replacement in kyq"

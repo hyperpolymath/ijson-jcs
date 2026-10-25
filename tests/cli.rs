@@ -401,7 +401,23 @@ fn non_utf8_filenames_are_processed_without_panicking() {
     use std::os::unix::ffi::OsStringExt;
     let old = temp_file("original.json", b"{\"b\":2,\"a\":1}");
     let path = old.with_file_name(std::ffi::OsString::from_vec(b"name\xff.json".to_vec()));
-    fs::rename(old, &path).unwrap();
+    if let Err(error) = fs::rename(&old, &path) {
+        // APFS refuses invalid UTF-8 before the CLI can open the file. Exercise
+        // the real error path instead of assuming every Unix FS is byte-based.
+        #[cfg(target_os = "macos")]
+        {
+            assert_eq!(error.raw_os_error(), Some(92)); // EILSEQ
+            for command in ["fix", "check", "canon"] {
+                let out = run_on(command, &[&path]);
+                assert_eq!(out.status.code(), Some(2));
+                assert!(!String::from_utf8_lossy(&out.stderr).contains("panicked"));
+            }
+            assert_eq!(fs::read(old).unwrap(), b"{\"b\":2,\"a\":1}");
+            return;
+        }
+        #[cfg(not(target_os = "macos"))]
+        panic!("non-UTF-8 fixture creation failed: {error}");
+    }
     assert_eq!(run_on("fix", &[&path]).status.code(), Some(0));
     assert_eq!(run_on("check", &[&path]).status.code(), Some(0));
 }

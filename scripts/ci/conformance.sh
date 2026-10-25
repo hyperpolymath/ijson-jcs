@@ -7,6 +7,13 @@ standards=$(bash scripts/ci/fetch-source.sh "standards-$STANDARDS_REV" "$STANDAR
 cargo build --locked --bin ijson-jcs
 export IJSON_JCS=$PWD/target/debug/ijson-jcs
 bash scripts/ci/standards.sh
+files=()
+while IFS= read -r -d '' file; do files+=("$file"); done < <(git ls-files -z '*.json' '*.jsonld' '*.json-ld' '*.jsonl' '*.ndjson')
+if (( ${#files[@]} > 0 )); then
+  bash scripts/check-estate-json.sh "${files[@]}"
+else
+  echo 'No tracked JSON-family payloads; non-vacuous framing fixtures ran separately.'
+fi
 bun "$standards/1-formats/deed/tools/deed_lint.js" --self-test
 bun "$standards/1-formats/deed/tools/deed_lint.js" --fixtures "$standards/1-formats/deed/tools/fixtures"
 bun "$standards/1-formats/deed/tools/deed_lint.js" 0-AI-MANIFEST.deed

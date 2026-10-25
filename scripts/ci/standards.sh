@@ -6,7 +6,7 @@ source .ci/pins.sh
 revision=${1:-$STANDARDS_REV}
 standards=$(bash scripts/ci/fetch-source.sh "standards-$revision" "$STANDARDS_REPOSITORY" "$revision")
 if [[ "$revision" == "$STANDARDS_REV" ]]; then
-  (cd "$standards" && sha256sum --check "$OLDPWD/.ci/standards.sha256")
+  bash scripts/ci/standard-inputs.sh "$standards" .ci/standards.sha256
 else
   # A candidate must contain every presently required normative input. Hash
   # differences are the proposal, not silent replacement of the accepted pin.
@@ -14,6 +14,8 @@ else
 fi
 export IJSON_JCS=${IJSON_JCS:-$PWD/target/debug/ijson-jcs}
 test -x "$IJSON_JCS"
+bash scripts/tests/standard-inputs.sh
 bash "$standards/scripts/tests/check-ijson-jcs-test.sh"
+bash scripts/tests/standards-contract.sh "$standards" "$IJSON_JCS"
 bash scripts/tests/estate-json.sh "$IJSON_JCS"
 printf 'Standards fixture suite executed at %s against %s\n' "$revision" "$IJSON_JCS"

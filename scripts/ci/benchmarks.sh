@@ -7,7 +7,7 @@ proven=$(bash scripts/ci/fetch-source.sh proven-tests-and-benches hyperpolymath/
 bash "$proven/scripts/test/check-bench-regression.test.sh"
 mkdir -p target/ci
 export IJSON_BENCH_OUTPUT=$PWD/target/ci/proven-bench.json
-cargo bench --locked --bench jcs
+IJSON_RUSTC_VERSION="$(rustc --version)" cargo bench --locked --bench jcs
 jq -L "$proven/scripts" -e -s 'include "bench-stats";
   length == 1 and (.[0] | (bench_errors | length) == 0 and (checksum_errors | length) == 0)
 ' "$IJSON_BENCH_OUTPUT" >/dev/null
@@ -16,5 +16,8 @@ IJSON_JCS=$PWD/target/debug/ijson-jcs bash scripts/check-estate-json.sh "$IJSON_
 if [[ -e .ci/bench-baseline.json ]]; then
   bash "$proven/scripts/check-bench-regression.sh" "$IJSON_BENCH_OUTPUT" .ci/bench-baseline.json
 else
+  if [[ ${IJSON_REQUIRE_BASELINE:-0} == 1 ]]; then
+    echo 'Release requires a reviewed baseline from ten accepted main runs' >&2; exit 2
+  fi
   printf '%s\n' '::notice title=Benchmark baseline::BOOTSTRAPPING: measured workloads/checksums passed; timing regression NOT RUN. Requires at least ten accepted main-run receipts. No synthetic baseline is committed.'
 fi

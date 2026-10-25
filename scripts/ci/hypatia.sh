@@ -10,6 +10,7 @@ hypatia=$(bash scripts/ci/fetch-source.sh hypatia hyperpolymath/hypatia "$HYPATI
   mix local.rebar --force
   mix deps.get
   git diff --exit-code -- mix.lock
+  mix test --no-start test/rules/actions_lock_test.exs test/rules/workflow_audit_pins_test.exs
   mix escript.build
 )
 test -x "$hypatia/hypatia"

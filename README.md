@@ -6,6 +6,31 @@
 
 This crate provides comprehensive I-JSON (RFC 7493) validation and JCS (RFC 8785) canonicalization for deterministic JSON handling in scenarios requiring hashing, signing, content-addressing, or reproducible builds.
 
+## Estate routing and standards
+
+When estate instructions say `ijson-jcs`, they mean this repository:
+**[hyperpolymath/ijson-jcs](https://github.com/hyperpolymath/ijson-jcs)**.
+The intended repository gate interface is
+**[metadatastician/kyq](https://github.com/metadatastician/kyq)**, limited to
+TOML, Dhall, KYAML and this estate I-JSON/JCS profile. Preserve TOML/Dhall;
+YAML/YML migrates to KYAML and JSON variants migrate through kyq. Wider
+projection belongs to kyX. JSONL/NDJSON retain record framing; JSON-LD retains
+its contexts and graph semantics. JCS is not RDF dataset canonicalisation.
+
+Canonical policy lives in
+[metadatastician/standards](https://github.com/metadatastician/standards/blob/main/3-practice/JSON-POLICY.adoc),
+with the four-format boundary in `3-practice/DATA-FORMAT-ROUTING.adoc`.
+The estate file profile requires exactly one final LF; the library CLI also
+accepts canonical bytes without one, so CLI acceptance alone is not that
+entire on-disk policy. Keep the standards wrapper's framing checks.
+
+This repository must automatically track standards with tested update
+proposals for immutable revisions, running both library/CLI tests and the
+standards JSON-policy fixtures against the candidate. **That update mechanism
+is not yet installed here.** Do not claim a floating branch or an unrun test
+as synchronisation. Likewise, kyq's current build/validator stubs are not an
+operational gate; direct use of this CLI is transitional enforcement.
+
 ## Features
 
 - ✅ **I-JSON Validation**: Comprehensive validation of all I-JSON requirements
@@ -13,7 +38,7 @@ This crate provides comprehensive I-JSON (RFC 7493) validation and JCS (RFC 8785
 - ✅ **Dual-Mode APIs**: Loose parsing for compatibility, strict validation for safety
 - ✅ **Full RFC Compliance**: Adheres to both RFC 7493 and RFC 8785 specifications
 - ✅ **Comprehensive Testing**: 33+ unit tests plus doc tests covering all edge cases
-- ✅ **Zero Dependencies**: Minimal, clean dependency tree (serde, serde_json, thiserror)
+- **Small dependency set**: serde, serde_json and thiserror (not zero dependencies)
 
 ## Fork Relationship
 

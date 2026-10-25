@@ -165,24 +165,8 @@ fn validate_string_is_i_json(s: &str, path: &str) -> Result<(), ValidationError>
 /// - U+1FFFE, U+1FFFF, U+2FFFE, U+2FFFF, ... U+10FFFE, U+10FFFF
 ///   (last two of each supplementary plane)
 fn is_noncharacter(code_point: u32) -> bool {
-    // U+FDD0..U+FDEF
-    if (0xFDD0..=0xFDEF).contains(&code_point) {
-        return true;
-    }
-
-    // U+FFFE, U+FFFF
-    if code_point == 0xFFFE || code_point == 0xFFFF {
-        return true;
-    }
-
-    // U+1FFFE, U+1FFFF, U+2FFFE, U+2FFFF, etc.
-    // These are all code points where the last 16 bits are FFFE or FFFF
-    // and the code point is within the valid Unicode range (U+0000..U+10FFFF)
-    if code_point <= 0x10FFFF && (code_point & 0xFFFF) >= 0xFFFE {
-        return true;
-    }
-
-    false
+    (0xFDD0..=0xFDEF).contains(&code_point)
+        || (code_point <= 0x10FFFF && (code_point & 0xFFFF) >= 0xFFFE)
 }
 
 /// Validate that a number is valid I-JSON
@@ -208,33 +192,22 @@ fn validate_number_is_i_json(n: &serde_json::Number, path: &str) -> Result<(), V
             });
         }
     } else if let Some(u) = n.as_u64() {
-        // Check safe unsigned integer range
-        if u > SAFE_UINT_MAX {
-            return Err(ValidationError::UnsafeInteger {
-                value: u.to_string(),
-                path: path.to_string(),
-            });
-        }
-    } else if let Some(f) = n.as_f64() {
-        // Check for special float values (NaN, Infinity)
-        if !f.is_finite() {
-            return Err(ValidationError::NonFiniteNumber {
-                value: n.to_string(),
-                path: path.to_string(),
-            });
-        }
-
-        // For floats that are not integers, we could be more strict and check
-        // if they have exact representation, but I-JSON allows floats in general.
-        // The recommendation is primarily for integers outside the safe range.
-        //
-        // For now, we allow all finite floats as I-JSON compliant.
-        // Users who need exact representation for specific use cases
-        // should use integers or strings.
+        // as_i64 already failed. Any remaining unsigned value exceeds
+        // i64::MAX, hence necessarily exceeds the much smaller safe bound.
+        return Err(ValidationError::UnsafeInteger {
+            value: u.to_string(),
+            path: path.to_string(),
+        });
+    } else if !n.as_f64().is_some_and(f64::is_finite) {
+        // Also fail closed if a consumer unifies serde_json features that
+        // permit Number representations outside the binary64 domain.
+        return Err(ValidationError::NonFiniteNumber {
+            value: n.to_string(),
+            path: path.to_string(),
+        });
     }
 
-    // Note: serde_json::Number should always be i64, u64, or f64
-    // If we get here, the number is valid I-JSON
+    // All remaining floats have a finite binary64 representation.
     Ok(())
 }
 

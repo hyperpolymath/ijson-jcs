@@ -16,7 +16,10 @@ mkdir -p "$work/clean" "$work/fault" target/ci
 printf 'No credentials in this control.\n' > "$work/clean/control.txt"
 # A synthetic, never-valid credential-shaped string, generated only at runtime.
 # The firing test must fail even though it is in a comment in an AsciiDoc file.
-printf '# token = "%s%s"\n' 'ghp_' 'abcdefghijklmnopqrstuvwxyz0123456789' > "$work/fault/control.adoc"
+# Gitleaks intentionally allowlists the literal alphabet example. Derive a
+# reproducible non-allowlisted dummy instead; never change the scanner rules.
+dummy=$(printf '%s' 'ijson-jcs synthetic detector control' | sha256sum)
+printf '# token = "%s%s"\n' 'ghp_' "${dummy:0:36}" > "$work/fault/control.adoc"
 "$binary" dir "$work/clean" --redact --no-banner > "$work/clean.log" 2>&1
 status=0
 "$binary" dir "$work/fault" --redact --no-banner > "$work/fault.log" 2>&1 || status=$?

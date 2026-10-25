@@ -45,7 +45,7 @@ use serde_json::Value;
 use std::cmp::Ordering;
 
 use crate::error::CanonicalizationError;
-use crate::ijson::{self, SAFE_INT_MAX, SAFE_INT_MIN, SAFE_UINT_MAX};
+use crate::ijson::{self, SAFE_INT_MAX, SAFE_INT_MIN};
 
 /// Canonicalize a JSON value to JCS format (RFC 8785)
 ///
@@ -121,10 +121,8 @@ fn write_number_jcs(
         out.extend_from_slice(i.to_string().as_bytes());
         return Ok(());
     }
-    if let Some(u) = n.as_u64().filter(|u| *u <= SAFE_UINT_MAX) {
-        out.extend_from_slice(u.to_string().as_bytes());
-        return Ok(());
-    }
+    // A safe unsigned integer also fits i64 and was handled above. Keeping
+    // another unsigned-safe branch here would be unreachable duplication.
 
     // Integers outside the safe range are rejected by I-JSON validation
     // before we get here; anything left is a double.
@@ -222,6 +220,7 @@ fn utf16_code_unit_cmp(a: &str, b: &str) -> Ordering {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::ijson::SAFE_UINT_MAX;
     use serde_json::json;
 
     #[test]

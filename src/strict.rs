@@ -145,30 +145,38 @@ enum Frame<'a> {
 /// `validate_i_json` reports, with the token as written and its path in
 /// the same format.
 pub(crate) fn check_integer_tokens(input: &str) -> Result<(), ValidationError> {
-    let bytes = input.as_bytes();
+    let mut bytes = input.bytes().enumerate().peekable();
     let mut stack: Vec<Frame<'_>> = Vec::new();
-    let mut i = 0;
-    while i < bytes.len() {
-        match bytes[i] {
+    while let Some((start, byte)) = bytes.next() {
+        match byte {
             b'"' => {
-                // Valid JSON: an escape is `\` plus one byte that is never `"`.
-                let start = i;
-                i += 1;
-                while bytes[i] != b'"' {
-                    i += if bytes[i] == b'\\' { 2 } else { 1 };
+                // Input has already parsed as JSON. Consume escapes without
+                // letting an escaped quote terminate the string. Iterator
+                // progress is structural, not a manually incremented index.
+                let mut end = start;
+                let mut escaped = false;
+                for (index, byte) in bytes.by_ref() {
+                    end = index;
+                    if escaped {
+                        escaped = false;
+                    } else if byte == b'\\' {
+                        escaped = true;
+                    } else if byte == b'"' {
+                        break;
+                    }
                 }
                 if let Some(Frame::Object(key @ None)) = stack.last_mut() {
-                    *key = Some(&input[start..=i]);
+                    *key = Some(&input[start..=end]);
                 }
             }
             b'-' | b'0'..=b'9' => {
-                let start = i;
-                while i + 1 < bytes.len()
-                    && matches!(bytes[i + 1], b'0'..=b'9' | b'-' | b'+' | b'.' | b'e' | b'E')
-                {
-                    i += 1;
+                let mut end = start;
+                while let Some((index, _)) = bytes.next_if(|(_, byte)| {
+                    matches!(byte, b'0'..=b'9' | b'-' | b'+' | b'.' | b'e' | b'E')
+                }) {
+                    end = index;
                 }
-                let token = &input[start..=i];
+                let token = &input[start..=end];
                 if !token.contains(['.', 'e', 'E']) && !is_safe_integer(token) {
                     return Err(ValidationError::UnsafeInteger {
                         value: token.to_string(),
@@ -188,7 +196,6 @@ pub(crate) fn check_integer_tokens(input: &str) -> Result<(), ValidationError> {
             },
             _ => {}
         }
-        i += 1;
     }
     Ok(())
 }
@@ -218,6 +225,27 @@ fn path_of(stack: &[Frame<'_>]) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn owned_string_visitor_and_expected_type_diagnostics() {
+        let owned = de::value::StringDeserializer::<de::value::Error>::new("owned".into());
+        assert_eq!(
+            StrictValue::deserialize(owned).unwrap().0,
+            Value::String("owned".into())
+        );
+        let error = <de::value::Error as de::Error>::invalid_type(
+            de::Unexpected::Bytes(b"binary"),
+            &StrictVisitor,
+        );
+        assert!(error.to_string().contains("any valid JSON value"));
+    }
+
+    #[test]
+    fn escaped_quotes_never_expose_string_digits_as_integer_tokens() {
+        let text = serde_json::to_string("quoted\"18446744073709551616\"\\tail").unwrap();
+        assert!(from_str_no_duplicates(&text).is_ok());
+        assert!(check_integer_tokens(&text).is_ok());
+    }
 
     /// A repeated key is rejected at top level and when nested.
     #[test]

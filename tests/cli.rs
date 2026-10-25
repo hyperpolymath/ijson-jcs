@@ -441,3 +441,24 @@ fn stdout_write_failures_are_exit_two_not_panics() {
         assert!(!error.contains("panicked"));
     }
 }
+
+#[test]
+fn usage_errors_do_not_fall_through_to_reading_valid_stdin() {
+    let path = temp_file("valid-input", b"{}");
+    let out = bin()
+        .arg("canon")
+        .arg(&path)
+        .stdin(fs::File::open(&path).unwrap())
+        .output()
+        .unwrap();
+    assert_eq!(out.status.code(), Some(2));
+    assert!(String::from_utf8_lossy(&out.stderr).contains("takes no FILE"));
+    assert!(out.stdout.is_empty());
+    let out = bin()
+        .args(["canon", "--max-bytes", "0"])
+        .stdin(fs::File::open(&path).unwrap())
+        .output()
+        .unwrap();
+    assert_eq!(out.status.code(), Some(2));
+    assert!(String::from_utf8_lossy(&out.stderr).contains("positive, addressable byte count"));
+}

@@ -72,3 +72,32 @@ fn historical_float_and_integer_token_distinction_is_explicit() {
     assert!(parse_json_bytes(&bytes, JsonMode::Canonical).is_err());
     assert!(parse_json_bytes(&bytes, JsonMode::Loose).is_ok());
 }
+
+#[test]
+fn object_container_depth_is_bounded_independently_of_array_depth() {
+    let mut value = Value::Null;
+    for _ in 0..MAX_DEPTH {
+        value = Value::Object([("".into(), value)].into_iter().collect());
+    }
+    assert!(validate_i_json(&value).is_ok());
+    assert!(to_jcs(&value).is_ok());
+    value = Value::Object([("".into(), value)].into_iter().collect());
+    let error = validate_i_json(&value).unwrap_err();
+    assert_eq!(error.path(), "/".repeat(MAX_DEPTH - 1));
+    assert!(matches!(error, ValidationError::NestingTooDeep { .. }));
+    assert!(to_jcs(&value).is_err());
+}
+
+#[test]
+fn built_unsigned_numbers_and_boolean_validator_have_firing_controls() {
+    for number in [1u64 << 63, u64::MAX - 1, u64::MAX] {
+        let value = json!({"unsigned": number});
+        let error = validate_i_json(&value).unwrap_err();
+        assert_eq!(error.path(), "unsigned");
+        assert!(error.is_number_error());
+        assert!(!ijson_jcs::is_i_json(&value));
+        assert!(to_jcs(&value).is_err());
+    }
+    assert!(!ijson_jcs::is_i_json(&json!("\u{ffff}")));
+    assert!(ijson_jcs::is_i_json(&json!(9_007_199_254_740_991u64)));
+}

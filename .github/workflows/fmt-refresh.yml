@@ -1,0 +1,43 @@
+# SPDX-License-Identifier: MPL-2.0
+# One-shot: apply cargo fmt and commit it, so that `cargo fmt --all -- --check`
+# can be a real gate instead of a check on work the job did to itself.
+{
+  name: "Refresh formatting",
+  on: {
+    push: {
+      branches: [
+        "arena/3f41d7ab-ijson-jcs",
+      ],
+    },
+  },
+  permissions: {
+    contents: "write",
+  },
+  jobs: {
+    fmt: {
+      name: "cargo fmt",
+      runs-on: "ubuntu-24.04",
+      timeout-minutes: 15,
+      steps: [
+        {
+          uses: "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1", # v7.0.1
+          with: {
+            fetch-depth: 0,
+          },
+        },
+        {
+          name: "Install pinned Rust toolchain",
+          run: "set -euo pipefail\ncommand -v rustup >/dev/null || { echo '::error::rustup is not on this runner, so the toolchain pinned in rust-toolchain.toml cannot be installed'; exit 2; }\nrustup show active-toolchain",
+        },
+        {
+          name: "Format",
+          run: "cargo fmt --all",
+        },
+        {
+          name: "Commit any formatting",
+          run: "set -euo pipefail\nif git diff --quiet; then echo 'already formatted'; exit 0; fi\ngit config user.name standards-bot\ngit config user.email standards-bot@users.noreply.github.com\ngit add -A\ngit commit -m 'style: cargo fmt --all'\ngit push origin HEAD:${GITHUB_REF#refs/heads/}",
+        },
+      ],
+    },
+  },
+}

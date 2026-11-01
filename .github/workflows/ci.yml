@@ -36,10 +36,6 @@
           run: "set -euo pipefail\ncommand -v rustup >/dev/null || { echo '::error::rustup is not on this runner, so the toolchain pinned in rust-toolchain.toml cannot be installed'; exit 2; }\nrustup show active-toolchain",
         },
         {
-          name: "Bootstrap registry lock and formatting",
-          run: "bash scripts/ci/run.sh bootstrap bash scripts/ci/bootstrap.sh",
-        },
-        {
           name: "Test library, CLI and documentation",
           run: "bash scripts/ci/run.sh tests cargo test --locked --all-features",
         },

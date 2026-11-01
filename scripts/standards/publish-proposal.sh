@@ -111,6 +111,11 @@ if [ -n "${STANDARDS_SIGNING_KEY:-}" ] && [ -n "${STANDARDS_SIGNING_KEY_ID:-}" ]
   signed="yes"
 fi
 
+# last_line TEXT — the one line of a gh failure worth putting in a message.
+last_line() {
+  printf '%s\n' "$1" | grep -v '^$' | tail -n 1 | cut -c1-500
+}
+
 branch="standards/proposal-${head:0:12}"
 short="${head:0:12}"
 git -C "$root" checkout -B "$branch" >/dev/null 2>&1 ||
@@ -168,16 +173,21 @@ git -C "$root" -c user.name="hyperpolymath-standards-bot" \
 git -C "$root" push --force-with-lease origin "$branch" >/dev/null 2>&1 ||
   ijson_die "$IS_EXIT_CANNOT" "cannot push $branch"
 
-existing="$(gh pr list --repo "${GITHUB_REPOSITORY:-hyperpolymath/ijson-jcs}" --head "$branch" \
-  --state open --json number --jq 'if length == 0 then "" else (.[0].number | tostring) end')"
+repo="${GITHUB_REPOSITORY:-hyperpolymath/ijson-jcs}"
+existing="$(gh pr list --repo "$repo" --head "$branch" --state open --json number \
+  --jq 'if length == 0 then "" else (.[0].number | tostring) end')" ||
+  ijson_die "$IS_EXIT_CANNOT" "cannot list pull requests in $repo"
 if [ -n "$existing" ]; then
-  gh pr edit "$existing" --body-file "$body" >/dev/null ||
-    ijson_die "$IS_EXIT_CANNOT" "cannot update pull request $existing"
+  if ! answer="$(gh pr edit "$existing" --repo "$repo" --body-file "$body" 2>&1)"; then
+    # gh's own diagnosis is the actionable part: a token that may not open pull
+    # requests is the estate mechanism being unprovisioned, and it says so.
+    ijson_die "$IS_EXIT_CANNOT" "cannot update pull request $existing: $(last_line "$answer")"
+  fi
   printf 'publish: updated pull request %s on %s\n' "$existing" "$branch"
 else
-  url="$(gh pr create --repo "${GITHUB_REPOSITORY:-hyperpolymath/ijson-jcs}" --head "$branch" \
-    --title "standards: propose $short" \
-    --body-file "$body")" ||
-    ijson_die "$IS_EXIT_CANNOT" "cannot open a pull request for $branch"
-  printf 'publish: opened %s\n' "$url"
+  if ! answer="$(gh pr create --repo "$repo" --head "$branch" --base "${GITHUB_REF_NAME:-main}" \
+    --title "standards: propose $short" --body-file "$body" 2>&1)"; then
+    ijson_die "$IS_EXIT_CANNOT" "cannot open a pull request in $repo: $(last_line "$answer")"
+  fi
+  printf 'publish: opened %s\n' "$answer"
 fi

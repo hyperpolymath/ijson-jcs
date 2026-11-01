@@ -108,6 +108,17 @@ write_manifest() {
   ) >"$manifest"
 }
 
+# clip FILE [MAX] — one printable line of a file's bytes, for a FAIL line.
+clip() {
+  local file="$1" max="${2:-160}" text
+  if [ -f "$file" ]; then
+    text="$(od -An -v -c -- "$file" | tr -s ' ' | tr '\n' ' ' | sed 's/^ //; s/ $//')"
+    printf '%s' "${text:0:$max}"
+  else
+    printf '(missing)'
+  fi
+}
+
 # show FILE — a bounded, printable rendering for a mismatch report.
 show() {
   if [ -f "$1" ]; then
@@ -196,42 +207,39 @@ for case_dir in "$dir"/vectors/*/; do
   fi
 
   case_failed=0
+  reasons=""
   want_exit="$(head -n 1 "$case_dir/expect.exit" 2>/dev/null || true)"
   if [ -z "$want_exit" ]; then
-    printf 'FAIL %s: no expect.exit\n' "$id" >&2
+    reasons+="no expect.exit; "
     case_failed=1
   elif [ "$got_exit" != "$want_exit" ]; then
-    printf 'FAIL %s: exit %s, want %s\n' "$id" "$got_exit" "$want_exit" >&2
+    reasons+="exit $got_exit want $want_exit; "
     case_failed=1
   fi
   if [ -f "$case_dir/expect.stdout" ] && ! cmp -s -- "$tmpdir/stdout" "$case_dir/expect.stdout"; then
-    printf 'FAIL %s: stdout differs\n  want:\n' "$id" >&2
-    show "$case_dir/expect.stdout" >&2
-    printf '  got:\n' >&2
-    show "$tmpdir/stdout" >&2
+    reasons+="stdout=[$(clip "$tmpdir/stdout")] want=[$(clip "$case_dir/expect.stdout")]; "
     case_failed=1
   fi
   if [ -f "$case_dir/expect.stdout_prefix" ]; then
     prefix="$(head -n 1 "$case_dir/expect.stdout_prefix")"
     if [ "$(head -n 1 "$tmpdir/stdout")" != "$prefix" ]; then
-      printf 'FAIL %s: first line of stdout is not %s\n' "$id" "$prefix" >&2
-      show "$tmpdir/stdout" >&2
+      reasons+="stdout prefix is not [$prefix] but [$(clip "$tmpdir/stdout")]; "
       case_failed=1
     fi
   fi
   if [ -f "$case_dir/expect.stderr_contains" ]; then
     needle="$(head -n 1 "$case_dir/expect.stderr_contains")"
     if ! grep -qF -- "$needle" "$tmpdir/stderr"; then
-      printf 'FAIL %s: stderr does not contain %s\n' "$id" "$needle" >&2
+      reasons+="stderr lacks [$needle], has [$(clip "$tmpdir/stderr")]; "
       case_failed=1
     fi
   fi
   if [ -f "$case_dir/expect.file" ] && ! cmp -s -- "$work/$filename" "$case_dir/expect.file"; then
-    printf 'FAIL %s: file contents differ\n  want:\n' "$id" >&2
-    show "$case_dir/expect.file" >&2
-    printf '  got:\n' >&2
-    show "$work/$filename" >&2
+    reasons+="file=[$(clip "$work/$filename")] want=[$(clip "$case_dir/expect.file")]; "
     case_failed=1
+  fi
+  if [ "$case_failed" -ne 0 ]; then
+    printf 'FAIL %s: %s\n' "$id" "${reasons%; }" >&2
   fi
 
   if [ "$case_failed" -eq 0 ]; then

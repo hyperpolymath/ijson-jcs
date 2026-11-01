@@ -116,12 +116,12 @@ mod tests {
             canonical,
             br#"{"@context":["https://example.invalid/a",{"@vocab":"https://example.invalid/"}],"a":1,"b":2}"#
         );
-        assert_eq!(
-            canonicalize_jsonld_document_to_string(input).unwrap(),
-            String::from_utf8(canonical).unwrap()
-        );
         // Library bytes, explicitly: no trailing line feed.
         assert!(!canonical.ends_with(b"\n"));
+        assert_eq!(
+            canonicalize_jsonld_document_to_string(input).unwrap(),
+            String::from_utf8(canonical.clone()).unwrap()
+        );
         assert!(classify(&canonical, CanonicalProfile::LibraryBytes)
             .unwrap()
             .is_canonical());

@@ -290,7 +290,10 @@ if [ -d "$root/interop/kyq/vectors" ]; then
   if bash "$scripts_dir/kyq-vectors.sh" verify --root "$root" --binary "$binary" >"$tmpdir/vectors.out" 2>&1; then
     ok "kyq-differential-vectors"
   else
-    bad "kyq-differential-vectors" "$(tail -n 5 "$tmpdir/vectors.out" | tr '\n' ' ')"
+    # Name the cases, not a wall of bytes: this has to stay readable inside one
+    # CI annotation, and the case id is what a reviewer acts on.
+    bad "kyq-differential-vectors" \
+      "$(grep -E '^(FAIL|kyq-vectors:)' "$tmpdir/vectors.out" | head -n 6 | tr '\n' ';' | cut -c1-1400)"
   fi
 else
   bad "kyq-differential-vectors" "interop/kyq/vectors is missing"

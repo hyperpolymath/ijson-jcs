@@ -185,7 +185,12 @@ if [ -n "$existing" ]; then
   fi
   printf 'publish: updated pull request %s on %s\n' "$existing" "$branch"
 else
-  if ! answer="$(gh pr create --repo "$repo" --head "$branch" --base "${GITHUB_REF_NAME:-main}" \
+  # The base is the repository's default branch, not the branch this job is
+  # running on: a proposal from a feature branch is still a proposal against
+  # main, and asking gh to infer it gets that wrong outside a push to main.
+  base="$(gh api "repos/$repo" --jq .default_branch 2>/dev/null || printf 'main')"
+  [ -n "$base" ] || base=main
+  if ! answer="$(gh pr create --repo "$repo" --head "$branch" --base "$base" \
     --title "standards: propose $short" --body-file "$body" 2>&1)"; then
     ijson_die "$IS_EXIT_CANNOT" "cannot open a pull request in $repo: $(last_line "$answer")"
   fi

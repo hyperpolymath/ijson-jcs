@@ -101,7 +101,7 @@
             STANDARDS_SIGNING_KEY: "${{ secrets.STANDARDS_SIGNING_KEY }}",
             STANDARDS_SIGNING_KEY_ID: "${{ secrets.STANDARDS_SIGNING_KEY_ID }}",
           },
-          run: "bash scripts/standards/publish-proposal.sh \"${{ steps.detect.outputs.head }}\"",
+          run: "bash scripts/ci/run.sh standards-publish bash scripts/standards/publish-proposal.sh \"${{ steps.detect.outputs.head }}\"",
         },
       ],
     },

@@ -41,6 +41,25 @@
 // let canonical_bytes = to_jcs(&value)?;
 // // canonical_bytes == b"{\"a\":2,\"b\":1}"
 // ```
+//
+// # Bytes are not files
+//
+// Three byte-level questions are separate here, because conflating them is a
+// real defect class:
+//
+// 1. `to_jcs` (and `canonicalize_bytes`) — **library canonical bytes**: what
+//    you hash or sign, with no trailing line feed.
+// 2. `estate_file_bytes` (and `estate_file_from_bytes`) — the **estate file
+//    profile**: those bytes plus exactly one `\n`, as JSON-POLICY J-1 requires
+//    on disk.
+// 3. `classify` with a `CanonicalProfile` — the verdict for bytes you already
+//    have. `check`'s historical rule is `CanonicalProfile::Tolerant` (either
+//    form); a gate that claims J-1 must ask for `CanonicalProfile::EstateFile`.
+//
+// `records` splits JSON Lines / NDJSON into one record per line under the same
+// verdicts, and `canonicalize_jsonld_document` canonicalises a JSON-LD
+// **document** without ever claiming RDF dataset canonicalisation — see
+// `supports_rdf_dataset_canonicalization`, which is `false`.
 
 #![forbid(unsafe_code)]
 #![warn(missing_docs)]
@@ -50,6 +69,9 @@
 mod error;
 mod ijson;
 mod jcs;
+mod jsonld;
+mod profile;
+mod records;
 mod strict;
 
 use std::fmt;
@@ -88,6 +110,17 @@ impl fmt::Display for JsonMode {
 pub use error::{CanonicalizationError, IJsonError, ParseMode, ValidationError};
 pub use ijson::{is_i_json, validate_canonicalizable, validate_i_json};
 pub use jcs::{canonicalize, to_jcs, to_jcs_string};
+pub use jsonld::{
+    JSONLD_SCOPE, JsonLdScope, canonicalize_jsonld_document, canonicalize_jsonld_document_to_string,
+    declares_context, supports_rdf_dataset_canonicalization,
+};
+pub use profile::{
+    CanonicalProfile, Conformance, FINAL_LF, canonicalize_bytes, classify, estate_file_bytes,
+    estate_file_from_bytes, strip_estate_final_lf,
+};
+pub use records::{
+    FramingError, Records, canonicalize_records, classify_records, record_count, records,
+};
 
 pub use serde_json::Value;
 

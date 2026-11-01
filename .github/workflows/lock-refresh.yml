@@ -1,0 +1,40 @@
+# SPDX-License-Identifier: MPL-2.0
+# Temporary recovery workflow: regenerate Cargo.lock against the deps in
+# Cargo.toml and commit it to the dispatching branch. Removed once the lock is
+# committed; the lock is normally only changed by a reviewed pull request.
+{
+  name: "Refresh Cargo.lock",
+  on: {
+    workflow_dispatch: {},
+  },
+  permissions: {
+    contents: "write",
+  },
+  jobs: {
+    lock: {
+      name: "Regenerate the lock",
+      runs-on: "ubuntu-24.04",
+      timeout-minutes: 15,
+      steps: [
+        {
+          uses: "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1", # v7.0.1
+          with: {
+            fetch-depth: 0,
+          },
+        },
+        {
+          name: "Install pinned Rust toolchain",
+          run: "set -euo pipefail\ncommand -v rustup >/dev/null || { echo '::error::rustup is not on this runner, so the toolchain pinned in rust-toolchain.toml cannot be installed'; exit 2; }\nrustup show active-toolchain",
+        },
+        {
+          name: "Regenerate the lock",
+          run: "cargo generate-lockfile",
+        },
+        {
+          name: "Commit it to this branch",
+          run: "set -euo pipefail\nif git diff --quiet -- Cargo.lock; then echo 'the lock is already current'; exit 0; fi\ngit config user.name standards-bot\ngit config user.email standards-bot@users.noreply.github.com\ngit add -- Cargo.lock\ngit commit -m 'chore: refresh Cargo.lock for the declared dependencies'\ngit push origin HEAD:${GITHUB_REF#refs/heads/}",
+        },
+      ],
+    },
+  },
+}

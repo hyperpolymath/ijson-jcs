@@ -58,7 +58,8 @@ proptest! {
         let input = format!("{{{quoted}:1,{quoted}:2}}");
         prop_assert!(parse_json(&input, JsonMode::Strict).is_err());
         prop_assert!(parse_json(&input, JsonMode::Canonical).is_err());
-        prop_assert_eq!(parse_json(&input, JsonMode::Loose).unwrap()[key], 2);
+        let loose = parse_json(&input, JsonMode::Loose).unwrap();
+        prop_assert_eq!(&loose[&key], &Value::from(2));
     }
 
     #[test]

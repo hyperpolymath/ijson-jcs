@@ -1,0 +1,34 @@
+// SPDX-License-Identifier: MPL-2.0
+// SPDX-FileCopyrightText: 2026 Hyperpolymath Estate
+= kyq interoperability drop
+
+This directory is the machine-checkable half of this repository's contract with
+`metadatastician/kyq`: the prose in `CONTRACT.adoc`, and one directory per
+differential vector in `vectors/`, sealed by `vectors.sha256`.
+
+== Checking it
+
+[source,bash]
+----
+# every vector must reproduce, byte for byte, against the candidate binary
+scripts/standards/kyq-vectors.sh verify --binary target/release/ijson-jcs
+
+# re-record after an intended change (a proposal, reviewed like any other)
+scripts/standards/kyq-vectors.sh write --binary target/release/ijson-jcs
+----
+
+`verify.sh` runs `verify` as one of its steps, so a vector that no longer
+matches fails the standards pipeline, not just a side check.
+
+== Why vectors and not a version pin alone
+
+kyq's AffineScript port of this implementation is still a stub: its
+`is_valid_i_json_string` returns `true` and its `validate_value` returns
+`Valid` for every input. A version number on a dependency would let that stub
+keep passing whatever this repository does. Vectors are harder to fake: they
+name inputs that must be *rejected*, with the exit code and error class, and
+they are checked against a real binary before they ship.
+
+That is also why nothing in this repository claims kyq readiness. Ready means
+kyq's own suite, lock-sync gate and the estate gates pass with this drop
+installed, and that is a statement for kyq's CI, not for this file.

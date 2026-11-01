@@ -1,0 +1,73 @@
+# SPDX-License-Identifier: MPL-2.0
+# KYAML content; GitHub requires the .yml extension.
+#
+# Keep kyq's pinned contract and differential vectors in step with this
+# repository — through a pull request in kyq, opened by the estate mechanism.
+#
+# verify (default) proves the recorded vectors against a built binary. propose
+# additionally copies the drop into metadatastician/kyq and opens one pull
+# request. Neither mode claims kyq readiness: kyq's stub validator, its own
+# suite and the estate gates decide that.
+{
+  name: "kyq contract sync",
+  on: {
+    workflow_dispatch: {
+      inputs: {
+        mode: {
+          description: "verify the recorded vectors, or also propose the drop to kyq",
+          required: true,
+          default: "verify",
+          type: "choice",
+          options: [
+            "verify",
+            "propose",
+          ],
+        },
+      },
+    },
+  },
+  permissions: {
+    contents: "read",
+  },
+  concurrency: {
+    group: "kyq-sync",
+    cancel-in-progress: false,
+  },
+  jobs: {
+    sync: {
+      name: "Verify and propose the kyq drop",
+      runs-on: "ubuntu-24.04",
+      timeout-minutes: 30,
+      steps: [
+        {
+          uses: "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1", # v7.0.1
+          with: {
+            persist-credentials: false,
+            fetch-depth: 0,
+          },
+        },
+        {
+          name: "Install pinned Rust toolchain",
+          run: "set -euo pipefail\ncommand -v rustup >/dev/null || { echo '::error::rustup is not on this runner, so the toolchain pinned in rust-toolchain.toml cannot be installed'; exit 2; }\nrustup show active-toolchain",
+        },
+        {
+          name: "Build the candidate binary",
+          run: "bash scripts/ci/run.sh kyq-build cargo build --release --locked",
+        },
+        {
+          name: "Verify the differential vectors",
+          run: "bash scripts/ci/run.sh kyq-vectors bash scripts/standards/kyq-vectors.sh verify --binary target/release/ijson-jcs",
+        },
+        {
+          name: "Propose the drop to kyq",
+          if: "inputs.mode == 'propose'",
+          env: {
+            KYQ_SYNC_TOKEN: "${{ secrets.KYQ_SYNC_TOKEN }}",
+          },
+          # Fails, rather than skipping, when the estate token is missing.
+          run: "bash scripts/standards/publish-kyq-drop.sh",
+        },
+      ],
+    },
+  },
+}

@@ -1,0 +1,72 @@
+// SPDX-License-Identifier: MPL-2.0
+// SPDX-FileCopyrightText: 2026 Hyperpolymath Estate
+= Standards receipts
+
+One file per *accepted* standards revision: the evidence
+`scripts/standards/verify.sh` wrote when it proved a candidate binary against
+that revision.
+
+A receipt is written by `verify.sh --receipt PATH` only when every step passed.
+It is an estate file: canonical JSON (JCS, members sorted, no insignificant
+whitespace) followed by exactly one line feed, which the candidate binary itself
+re-checks before the receipt is kept. `tests/standards_pin.rs` re-checks every
+receipt here on every `cargo test`.
+
+== What a receipt records
+
+[cols="1,3",options="header"]
+|===
+| Field | Meaning
+
+| `schema`
+| `ijson-jcs/standards-receipt/1`.
+
+| `generated`
+| When the run happened, UTC.
+
+| `source.commit`, `source.dirty`
+| The ijson-jcs revision the run used, and whether the tree was dirty (a dirty
+  run is recorded as dirty, not silently accepted as clean).
+
+| `standards.revision`
+| The immutable metadatastician/standards commit that was verified.
+
+| `standards.pinned_files`, `standards.manifest_sha256`
+| How many inputs the pin covers, and the digest of the manifest itself, so a
+  later manifest edit cannot be mistaken for the one that was verified.
+
+| `standards.contract_sha256`
+| The digest of the normative-assertion list the revision satisfied.
+
+| `toolchain.cargo`, `toolchain.rustc`, `toolchain.toolchain_file_sha256`
+| The toolchain, as measured, not as assumed.
+
+| `binary.path`, `binary.sha256`
+| The exact binary the checks ran against.
+
+| `checks[]`
+| Every step that ran, by name. A receipt is only written when every one
+  passed, so the list is the run's coverage.
+
+| `verdict`
+| `accepted`.
+|===
+
+== Why they are kept
+
+They are the historical bytes of a decision: after the pin moves, the receipt
+for the previous revision still says which standards commit, which toolchain and
+which binary were accepted, and its digest is in
+`.ci/standards-revisions.tsv`. Nothing rewrites a receipt. A new run writes a
+new file.
+
+== Signing
+
+`verify.sh` writes the receipt; it does not sign it. Publication is where the
+signature belongs: `.github/workflows/standards-update.yml` commits the receipt
+into the proposal branch, and `scripts/standards/publish-proposal.sh` records in
+the pull request whether that commit was signed. Signing needs
+`STANDARDS_SIGNING_KEY` and `STANDARDS_SIGNING_KEY_ID` from the estate
+mechanism; without them the pull request says `commit signed: no`, and the
+proposal is still reviewable but not attested. That gap is deliberate and
+visible rather than papered over.

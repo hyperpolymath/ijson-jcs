@@ -11,7 +11,11 @@ pub struct Pair {
 pub const PAIRS: &[Pair] = &[
     Pair { class: "duplicate decoded keys", clean: br#"{"a":1,"b":2}"#, fault: br#"{"a":1,"\u0061":2}"#, diagnostic: "duplicate object key" },
     Pair { class: "duplicate nested keys", clean: br#"[{"k":1},{"k":2}]"#, fault: br#"[{"k":1,"k":2}]"#, diagnostic: "duplicate object key" },
-    Pair { class: "surrogates", clean: br#""\ud800\udc00""#, fault: br#""\ud800""#, diagnostic: "surrogate" },
+    // A raw lone high surrogate is refused by the parser as an unterminated
+    // surrogate-pair escape ("unexpected end of hex escape"); the class still
+    // fires, and a *decoded* lone surrogate cannot reach validation because the
+    // parser never yields one.
+    Pair { class: "surrogates", clean: br#""\ud800\udc00""#, fault: br#""\ud800""#, diagnostic: "hex escape" },
     Pair { class: "noncharacters", clean: br#""\ufffd""#, fault: br#""\uffff""#, diagnostic: "noncharacter" },
     Pair { class: "safe integer boundary", clean: b"9007199254740991", fault: b"9007199254740992", diagnostic: "outside safe integer range" },
     Pair { class: "integer token beyond u64", clean: br#""18446744073709551616""#, fault: b"18446744073709551616", diagnostic: "outside safe integer range" },

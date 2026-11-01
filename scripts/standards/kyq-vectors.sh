@@ -174,11 +174,13 @@ for case_dir in "$dir"/vectors/*/; do
     curated=0
     if [ -f "$case_dir/expect.stdout_prefix" ]; then
       prefix="$(head -n 1 "$case_dir/expect.stdout_prefix")"
-      if [ "$(head -n 1 "$tmpdir/stdout")" != "$prefix" ]; then
-        printf 'REFUSED %s: stdout no longer starts with %s\n' "$id" "$prefix" >&2
-        show "$tmpdir/stdout" >&2
-        curated=1
-      fi
+      case "$(head -n 1 "$tmpdir/stdout")" in
+        "$prefix"*) : ;;
+        *)
+          printf 'REFUSED %s: stdout no longer starts with %s\n' "$id" "$prefix" >&2
+          curated=1
+          ;;
+      esac
     fi
     if [ -f "$case_dir/expect.stderr_contains" ]; then
       needle="$(head -n 1 "$case_dir/expect.stderr_contains")"
@@ -223,11 +225,17 @@ for case_dir in "$dir"/vectors/*/; do
     case_failed=1
   fi
   if [ -f "$case_dir/expect.stdout_prefix" ]; then
+    # A prefix assertion: the first line must *start* with the recorded text, so
+    # a refusal stays recognisable after its reason is appended.
     prefix="$(head -n 1 "$case_dir/expect.stdout_prefix")"
-    if [ "$(head -n 1 "$tmpdir/stdout")" != "$prefix" ]; then
-      reasons+="stdout prefix is not [$prefix] but [$(clip "$tmpdir/stdout")]; "
-      case_failed=1
-    fi
+    first_line="$(head -n 1 "$tmpdir/stdout")"
+    case "$first_line" in
+      "$prefix"*) : ;;
+      *)
+        reasons+="stdout prefix is not [$prefix] but [$(clip "$tmpdir/stdout")]; "
+        case_failed=1
+        ;;
+    esac
   fi
   if [ -f "$case_dir/expect.stderr_contains" ]; then
     needle="$(head -n 1 "$case_dir/expect.stderr_contains")"

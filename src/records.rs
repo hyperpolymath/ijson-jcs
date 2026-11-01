@@ -28,7 +28,7 @@
 //! assert_eq!(classify_records(input).unwrap(), Conformance::NotCanonical);
 //!
 //! let blank = classify_records(b"{}\n\n{}\n").unwrap_err();
-//! assert_eq!(blank.to_string(), "JSON Lines framing: line 2 is blank (JSON Lines has no blank lines)");
+//! assert_eq!(blank.to_string(), "line 2 is blank (JSON Lines has no blank lines)");
 //! assert!(matches!(blank, FramingError::BlankLine { line: 2 }));
 //! ```
 

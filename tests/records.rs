@@ -114,7 +114,8 @@ fn fix_jsonl_rewrites_and_is_idempotent() {
         format!("FIXED {}\n", path.display())
     );
     let once = fs::read(&path).unwrap();
-    assert_eq!(once, b"{\"a\":1,\"b\":2}\n[3,1]\n{\"c\":null}\n");
+    // Keys sort, values travel with them: `a` (2) before `b` (1).
+    assert_eq!(once, b"{\"a\":2,\"b\":1}\n[3,1]\n{\"c\":null}\n");
 
     let out = run_on("fix-jsonl", &[&path]);
     assert_eq!(out.status.code(), Some(0));

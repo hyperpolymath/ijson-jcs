@@ -1,6 +1,6 @@
 a4f7aae5acc3d2909b7503d77f74209365fde68bc96acca40835a365c98834d0  vectors/01-canon-object-order/cmd
 9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa  vectors/01-canon-object-order/expect.exit
-43258cff783fe7036d8a43033f830adfc60ec037382473548ac742b888292777  vectors/01-canon-object-order/expect.stdout
+d3626ac30a87e6f7a6428233b3c68299976865fa5508e4267c5415c76af7a772  vectors/01-canon-object-order/expect.stdout
 a1d46c3cdb4e5795c8d637f80daeb578ebb1a9a65dc1ed5f11f51794c3c89f3a  vectors/01-canon-object-order/stdin
 a4f7aae5acc3d2909b7503d77f74209365fde68bc96acca40835a365c98834d0  vectors/02-canon-numbers/cmd
 9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa  vectors/02-canon-numbers/expect.exit
@@ -85,7 +85,7 @@ e69513b6413b25e8029f6fef2eba182d94be1272dfc72511bc92d262fc4cb96c  vectors/19-che
 43138fc0ecbd2bbf004b3de0245357f08c8fc94b194580f5a14faab47e49fbe9  vectors/20-fix-estate-profile/stdin
 7a5880d711e44ad393d86ffd6c0a5583062cb9f25fd788b23c5584076e21a44a  vectors/21-fix-jsonl-records/cmd
 9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa  vectors/21-fix-jsonl-records/expect.exit
-8b7128d61b7ca7a5981d3f781052e5a5f0a1ec62c12fa228707082efb4f1c5ab  vectors/21-fix-jsonl-records/expect.file
+ab52ce0230cf4e59e5231649ddafd2664791938bfd60941702ff785c13fe86ee  vectors/21-fix-jsonl-records/expect.file
 7a97967f5a73660889f0b74be718df4b31c1355b860963158112db1e3e0382f8  vectors/21-fix-jsonl-records/expect.stdout
 7bf771c74ec25b3a7e8f6aeec06ccbe48cfc31a75935019d160ffeee5e2f1601  vectors/21-fix-jsonl-records/filename
 77912a507f021b3b0eb418590aba08a93fc715a3e38a4077a2727ead5809bfd7  vectors/21-fix-jsonl-records/stdin

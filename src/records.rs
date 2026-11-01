@@ -24,7 +24,7 @@
 //! use ijson_jcs::{Conformance, FramingError, canonicalize_records, classify_records};
 //!
 //! let input = b"{\"b\":1,\"a\":2}\n{\"c\":3}\n";
-//! assert_eq!(canonicalize_records(input).unwrap(), b"{\"a\":1,\"b\":2}\n{\"c\":3}\n");
+//! assert_eq!(canonicalize_records(input).unwrap(), b"{\"a\":2,\"b\":1}\n{\"c\":3}\n");
 //! assert_eq!(classify_records(input).unwrap(), Conformance::NotCanonical);
 //!
 //! let blank = classify_records(b"{}\n\n{}\n").unwrap_err();
@@ -224,7 +224,9 @@ mod tests {
     fn records_are_canonicalised_individually() {
         let input = b"{\"b\":1,\"a\":2}\n[3, 1, 2]\n\"x\"\n";
         let canonical = canonicalize_records(input).unwrap();
-        assert_eq!(canonical, b"{\"a\":1,\"b\":2}\n[3,1,2]\n\"x\"\n");
+        // `b` sorts before `a` is false: JCS sorts by key, so `a` (value 2)
+        // comes first and `b` (value 1) second. The values travel with the keys.
+        assert_eq!(canonical, b"{\"a\":2,\"b\":1}\n[3,1,2]\n\"x\"\n");
         assert!(classify_records(&canonical).unwrap().is_canonical());
         // `to_jcs` of the whole document would be one array, not three records.
         assert_ne!(canonicalize_bytes(b"{\"b\":1,\"a\":2}").unwrap(), canonical);

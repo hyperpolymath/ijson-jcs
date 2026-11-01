@@ -141,7 +141,9 @@ for case_dir in "$dir"/vectors/*/; do
   id="$(basename -- "$case_dir")"
   [ -f "$case_dir/cmd" ] || ijson_die "$IS_EXIT_WRONG_INPUT" "$id has no cmd file"
   [ -f "$case_dir/stdin" ] || ijson_die "$IS_EXIT_WRONG_INPUT" "$id has no stdin file"
-  mapfile -t argv <"$case_dir/cmd"
+  # One argument per field: the cmd file is a command line, not one word per
+  # line. (`mapfile` would make "check --profile estate-file" a single argv.)
+  read -r -a argv <"$case_dir/cmd"
   [ "${#argv[@]}" -gt 0 ] || ijson_die "$IS_EXIT_WRONG_INPUT" "$id has an empty cmd file"
   filename=case.json
   if [ -f "$case_dir/filename" ]; then

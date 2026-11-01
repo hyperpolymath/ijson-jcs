@@ -7,7 +7,6 @@
     push: {
       branches: [
         "main",
-        "arena/d216802e-ijson-jcs",
       ],
     },
     merge_group: {},

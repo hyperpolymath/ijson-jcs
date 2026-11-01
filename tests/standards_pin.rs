@@ -194,8 +194,12 @@ fn entries_paths() -> BTreeSet<String> {
 #[test]
 fn revision_log_ends_at_the_pin() {
     let log = read(".ci/standards-revisions.tsv");
-    let mut lines = log.lines().filter(|line| !line.trim().is_empty());
-    let header = lines.next().expect("the revision log is empty");
+    // The log may carry licence/prose comments before its header; only the
+    // first *record* line is the header.
+    let mut lines = log
+        .lines()
+        .filter(|line| !line.trim().is_empty() && !line.starts_with('#'));
+    let header = lines.next().expect("the revision log has no header line");
     assert_eq!(
         header, "date\trevision\tprevious\tmanifest_sha256\tsource",
         "the revision log has no header"

@@ -174,7 +174,11 @@ cannot be re-baselined without the manifest changing in review.
 `.github/workflows/kyq-sync.yml` verifies the vectors, and on demand copies the
 drop into kyq as `interop/ijson-jcs/` on a branch and opens one pull request
 through `publish-kyq-drop.sh`. It fails rather than skipping when
-`KYQ_SYNC_TOKEN` is not provisioned.
+`KYQ_SYNC_TOKEN` is not provisioned — and that is not defensive wording: the
+drop was rehearsed here and the push was refused with `Permission to
+metadatastician/kyq.git denied to hyperpolymath`, even though the API reports
+push access on the repository. A credential that may write to kyq has to be
+provisioned deliberately; a read/no-write token being present is not it.
 
 Verifying the vectors is one input to kyq's readiness. kyq's stub validator
 (`is_valid_i_json_string` returning `true`), a `yq` alias, or a green YAML parse
@@ -243,9 +247,11 @@ real proposal starts from `main`.
   `.ci/receipts/README.adoc`.
 
 | 5. kyq's pinned contract and differential vectors through the same process
-| proposed, not merged in kyq
-| `interop/kyq/`, `kyq-vectors.sh`, `.github/workflows/kyq-sync.yml`,
-  `publish-kyq-drop.sh`. The pull request in kyq needs `KYQ_SYNC_TOKEN`.
+| ready to propose; not yet proposed in kyq
+| `interop/kyq/`, `kyq-vectors.sh` (24 vectors, verified against the CI binary),
+  `.github/workflows/kyq-sync.yml`, `publish-kyq-drop.sh` (dry run prints the
+  branch, revision and vectors digest). The push to kyq needs `KYQ_SYNC_TOKEN`
+  that may write there; the current credential is refused.
 
 | 6. CI, signed publication, consumer compatibility, a real proposal end to end
 | CI green; proposal rehearsed to the pull-request step; signing and the PR

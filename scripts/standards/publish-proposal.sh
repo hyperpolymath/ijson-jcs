@@ -170,6 +170,14 @@ git -C "$root" -c user.name="hyperpolymath-standards-bot" \
   -c user.email="standards-bot@users.noreply.github.com" \
   commit -m "$message" >/dev/null ||
   ijson_die "$IS_EXIT_CANNOT" "cannot commit the proposal"
+# A rerun updates the branch it pushed last time. --force-with-lease needs the
+# remote-tracking ref to be current, and a fresh checkout has never seen it, so
+# fetch it first: otherwise the second proposal for the same revision is
+# rejected as stale information rather than updating the pull request.
+if git -C "$root" ls-remote --exit-code --heads origin "$branch" >/dev/null 2>&1; then
+  git -C "$root" fetch -q origin "+refs/heads/$branch:refs/remotes/origin/$branch" ||
+    ijson_die "$IS_EXIT_CANNOT" "cannot fetch the existing branch $branch"
+fi
 git -C "$root" push --force-with-lease origin "$branch" >/dev/null 2>&1 ||
   ijson_die "$IS_EXIT_CANNOT" "cannot push $branch"
 

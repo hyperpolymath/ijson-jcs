@@ -11,14 +11,6 @@
 {
   name: "Standards update proposal",
   on: {
-    # TEMPORARY: one rehearsal of the whole path on this branch, because
-    # workflow_dispatch is only registered from the default branch. Removed in
-    # the next commit; the schedule and workflow_dispatch are the real triggers.
-    push: {
-      branches: [
-        "arena/3f41d7ab-ijson-jcs",
-      ],
-    },
     schedule: [
       {
         # Daily. Any drift is proposed once, not once per day: the branch name

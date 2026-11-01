@@ -180,6 +180,38 @@ Verifying the vectors is one input to kyq's readiness. kyq's stub validator
 (`is_valid_i_json_string` returning `true`), a `yq` alias, or a green YAML parse
 are none of them evidence that kyq is a gate.
 
+== Rehearsal (2026-11-01)
+
+The whole path was run once against a real candidate — upstream head
+`22e060bb239875c1180f08ca9fd9cc361b9ebc41` — triggered by a push, because
+`workflow_dispatch` is registered only from the default branch:
+
+* **detect**: `drift=true`, `head=22e060bb…`.
+* **propose**: pin, manifest and one revision record written; the two changed
+  files are both under `1-formats/deed/` and change nothing this crate depends
+  on; the previous revision in the log is `8e48b1ca…`.
+* **verify**: 15 checks pass at the *candidate* revision — including the pinned
+  gate test taken from that revision — and the receipt says
+  `"verdict":"accepted"`, `"label":"standards-update"`,
+  `"standards.revision":"22e060bb…"`.
+* **publish**: the branch `standards/proposal-22e060bb2398` was pushed with that
+  receipt, and then the step stopped with the error the script now reports
+  verbatim:
++
+[source,text]
+----
+pull request create failed: GraphQL: GitHub Actions is not permitted to create
+or approve pull requests (createPullRequest)
+----
+
+That is the estate mechanism, not the pipeline: the workflow token may push a
+branch but may not open a pull request. One of two owner actions fixes it —
+enable *Allow GitHub Actions to create and approve pull requests* in the
+repository settings, or provision `STANDARDS_UPDATE_TOKEN`. Until then the
+proposal is prepared, verified and pushed, and the run fails loudly rather than
+claiming it published. The rehearsal branch was deleted afterwards so the first
+real proposal starts from `main`.
+
 == Status
 
 [cols="1,1,4",options="header"]
@@ -216,12 +248,13 @@ are none of them evidence that kyq is a gate.
   `publish-kyq-drop.sh`. The pull request in kyq needs `KYQ_SYNC_TOKEN`.
 
 | 6. CI, signed publication, consumer compatibility, a real proposal end to end
-| CI done; signing needs the estate key
-| `.github/workflows/ci.yml` (Standards pipeline job),
-  `.github/workflows/standards-update.yml`. Commit signing is used when
-  `STANDARDS_SIGNING_KEY`/`STANDARDS_SIGNING_KEY_ID` are provisioned and the
-  pull request says `commit signed: no` when they are not. The dated revision
-  log and the retained receipts keep accepted bytes.
+| CI green; proposal rehearsed to the pull-request step; signing and the PR
+  credential need the estate
+| `.github/workflows/ci.yml` (Standards pipeline job, run 41363494161),
+  `.github/workflows/standards-update.yml` (rehearsal run 41363960949). Commit
+  signing is used when `STANDARDS_SIGNING_KEY`/`STANDARDS_SIGNING_KEY_ID` are
+  provisioned; the pull request says `commit signed: no` when they are not. The
+  dated revision log and the retained receipts keep accepted bytes.
 |===
 
 === Owner actions this cannot perform

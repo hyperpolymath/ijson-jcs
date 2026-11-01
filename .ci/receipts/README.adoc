@@ -26,7 +26,10 @@ receipt here on every `cargo test`.
 
 | `source.commit`, `source.dirty`
 | The ijson-jcs revision the run used, and whether the tree was dirty (a dirty
-  run is recorded as dirty, not silently accepted as clean).
+  run is recorded as dirty, not silently accepted as clean). A receipt written
+  by the update workflow is dirty **by construction**: `propose.sh` has already
+  rewritten the pin and the manifest, and those changes are committed with the
+  receipt. That is why the receipt names the candidate revision as well.
 
 | `standards.revision`
 | The immutable metadatastician/standards commit that was verified.

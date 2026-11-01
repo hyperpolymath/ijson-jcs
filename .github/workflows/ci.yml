@@ -63,6 +63,10 @@
           with: {
             persist-credentials: false,
             fetch-depth: 0,
+            # The receipt records HEAD as source.commit. On a pull request the
+            # default checkout is the ephemeral merge ref, which is not a
+            # revision anyone can fetch later, so check out the real head.
+            ref: "${{ github.event.pull_request.head.sha || github.sha }}",
           },
         },
         {

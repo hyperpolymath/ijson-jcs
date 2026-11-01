@@ -5,7 +5,14 @@
 {
   name: "Refresh Cargo.lock",
   on: {
-    workflow_dispatch: {},
+    # One-shot: runs when this file lands on the recovery branch, then commits
+    # the lock. workflow_dispatch needs the file on the default branch, which is
+    # the wrong place for a one-off repair.
+    push: {
+      branches: [
+        "arena/3f41d7ab-ijson-jcs",
+      ],
+    },
   },
   permissions: {
     contents: "write",

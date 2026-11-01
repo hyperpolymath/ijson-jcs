@@ -287,11 +287,14 @@ mod tests {
 
     #[test]
     fn test_noncharacters() {
-        for code in (0xFDD0..=0xFDEF).chain((0..=16).flat_map(|plane| {
-            [plane * 0x10000 + 0xFFFE, plane * 0x10000 + 0xFFFF]
-        })) {
+        for code in (0xFDD0..=0xFDEF)
+            .chain((0..=16).flat_map(|plane| [plane * 0x10000 + 0xFFFE, plane * 0x10000 + 0xFFFF]))
+        {
             let nonchar = char::from_u32(code).unwrap();
-            for value in [json!({"text": nonchar.to_string()}), json!({(nonchar.to_string()): 1})] {
+            for value in [
+                json!({"text": nonchar.to_string()}),
+                json!({(nonchar.to_string()): 1}),
+            ] {
                 let err = validate_i_json(&value).unwrap_err();
                 assert!(matches!(err, ValidationError::Noncharacter { .. }));
             }
@@ -394,7 +397,10 @@ mod tests {
     #[test]
     fn test_path_tracking() {
         let value = json!({"level1": {"level2": {"invalid": "\u{ffff}"}}});
-        assert_eq!(validate_i_json(&value).unwrap_err().path(), "level1/level2/invalid");
+        assert_eq!(
+            validate_i_json(&value).unwrap_err().path(),
+            "level1/level2/invalid"
+        );
         assert!(validate_i_json(&json!({"level1": {"control": "\u{0000}"}})).is_ok());
     }
 }

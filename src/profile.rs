@@ -256,12 +256,23 @@ mod tests {
             ),
         ] {
             let verdict = |profile| {
-                classify(bytes, profile)
-                    .unwrap_or_else(|e| panic!("{profile} {bytes:?}: {e}"))
+                classify(bytes, profile).unwrap_or_else(|e| panic!("{profile} {bytes:?}: {e}"))
             };
-            assert_eq!(verdict(CanonicalProfile::LibraryBytes), library, "library {bytes:?}");
-            assert_eq!(verdict(CanonicalProfile::EstateFile), estate_file, "estate-file {bytes:?}");
-            assert_eq!(verdict(CanonicalProfile::Tolerant), tolerant, "tolerant {bytes:?}");
+            assert_eq!(
+                verdict(CanonicalProfile::LibraryBytes),
+                library,
+                "library {bytes:?}"
+            );
+            assert_eq!(
+                verdict(CanonicalProfile::EstateFile),
+                estate_file,
+                "estate-file {bytes:?}"
+            );
+            assert_eq!(
+                verdict(CanonicalProfile::Tolerant),
+                tolerant,
+                "tolerant {bytes:?}"
+            );
         }
     }
 
@@ -294,13 +305,19 @@ mod tests {
         let value = json!({"b": [1, 2.5, null], "a": "x"});
         for profile in [CanonicalProfile::LibraryBytes, CanonicalProfile::EstateFile] {
             let bytes = profile.canonical_bytes(&value).unwrap();
-            assert!(classify(&bytes, profile).unwrap().is_canonical(), "{profile}");
+            assert!(
+                classify(&bytes, profile).unwrap().is_canonical(),
+                "{profile}"
+            );
             assert_eq!(canonicalize_bytes(&bytes).unwrap(), to_jcs(&value).unwrap());
         }
         let text = b"{ \"a\" : 1 }";
         assert_eq!(estate_file_from_bytes(text).unwrap(), b"{\"a\":1}\n");
         assert_eq!(canonicalize_bytes(text).unwrap(), b"{\"a\":1}");
-        assert_eq!(strip_estate_final_lf(b"{\"a\":1}\n"), Some(&b"{\"a\":1}"[..]));
+        assert_eq!(
+            strip_estate_final_lf(b"{\"a\":1}\n"),
+            Some(&b"{\"a\":1}"[..])
+        );
         assert_eq!(strip_estate_final_lf(b"{\"a\":1}"), None);
     }
 

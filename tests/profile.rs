@@ -149,10 +149,19 @@ fn library_and_cli_agree_on_every_profile() {
 #[test]
 fn fix_writes_the_file_profile_and_canon_writes_library_bytes() {
     let path = temp_file("fix.json", b"{ \"b\" : 1, \"a\" : 2 }");
-    assert_eq!(bin().arg("fix").arg(&path).output().unwrap().status.code(), Some(0));
+    assert_eq!(
+        bin().arg("fix").arg(&path).output().unwrap().status.code(),
+        Some(0)
+    );
     assert_eq!(fs::read(&path).unwrap(), b"{\"a\":2,\"b\":1}\n");
     assert_eq!(
-        bin().args(["check", "--profile", "estate-file"]).arg(&path).output().unwrap().status.code(),
+        bin()
+            .args(["check", "--profile", "estate-file"])
+            .arg(&path)
+            .output()
+            .unwrap()
+            .status
+            .code(),
         Some(0)
     );
 
@@ -164,11 +173,23 @@ fn fix_writes_the_file_profile_and_canon_writes_library_bytes() {
     // estate-file-*not*-canonical; that is the whole distinction.
     let bare = temp_file("bare.json", &out.stdout);
     assert_eq!(
-        bin().args(["check", "--profile", "library"]).arg(&bare).output().unwrap().status.code(),
+        bin()
+            .args(["check", "--profile", "library"])
+            .arg(&bare)
+            .output()
+            .unwrap()
+            .status
+            .code(),
         Some(0)
     );
     assert_eq!(
-        bin().args(["check", "--profile", "estate-file"]).arg(&bare).output().unwrap().status.code(),
+        bin()
+            .args(["check", "--profile", "estate-file"])
+            .arg(&bare)
+            .output()
+            .unwrap()
+            .status
+            .code(),
         Some(1)
     );
 
@@ -206,12 +227,20 @@ fn profile_flag_is_refused_outside_check() {
         );
     }
     // A profile name that is not one of the three is a usage error, not a default.
-    let out = bin().args(["check", "--profile", "strict"]).arg(&path).output().unwrap();
+    let out = bin()
+        .args(["check", "--profile", "strict"])
+        .arg(&path)
+        .output()
+        .unwrap();
     assert_eq!(out.status.code(), Some(2));
     assert!(String::from_utf8_lossy(&out.stderr).contains("--profile needs"));
     // The aliases the module documents are accepted.
     for alias in ["library-bytes", "file", "check"] {
-        let out = bin().args(["check", "--profile", alias]).arg(&path).output().unwrap();
+        let out = bin()
+            .args(["check", "--profile", alias])
+            .arg(&path)
+            .output()
+            .unwrap();
         assert_ne!(out.status.code(), Some(2), "--profile {alias}");
     }
 }

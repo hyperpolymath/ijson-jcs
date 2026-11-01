@@ -67,7 +67,10 @@ EXIT STATUS:
 
 /// Render a parse/validation failure the way this CLI has always printed it.
 fn describe(error: &IJsonError) -> String {
-    match error.as_validation_error().map(|validation| validation.path()) {
+    match error
+        .as_validation_error()
+        .map(|validation| validation.path())
+    {
         Some(path) if !path.is_empty() => format!("{error} (at {path})"),
         _ => error.to_string(),
     }
@@ -89,7 +92,9 @@ fn read_bounded(reader: impl Read, limit: u64) -> io::Result<Vec<u8>> {
     let mut bytes = Vec::new();
     reader.take(limit + 1).read_to_end(&mut bytes)?;
     if bytes.len() as u64 > limit {
-        return Err(io::Error::other(format!("input exceeds --max-bytes {limit}")));
+        return Err(io::Error::other(format!(
+            "input exceeds --max-bytes {limit}"
+        )));
     }
     Ok(bytes)
 }
@@ -119,7 +124,10 @@ impl Drop for PendingFile {
 /// Ownership, ACLs and extended attributes are not copied; permission bits are.
 fn atomic_replace(path: &Path, bytes: &[u8], permissions: fs::Permissions) -> io::Result<()> {
     static NEXT: AtomicU64 = AtomicU64::new(0);
-    let parent = path.parent().filter(|p| !p.as_os_str().is_empty()).unwrap_or(Path::new("."));
+    let parent = path
+        .parent()
+        .filter(|p| !p.as_os_str().is_empty())
+        .unwrap_or(Path::new("."));
     for _ in 0..128 {
         let temp = parent.join(format!(
             ".ijson-jcs.{}.{}.tmp",
@@ -153,7 +161,9 @@ fn atomic_replace(path: &Path, bytes: &[u8], permissions: fs::Permissions) -> io
 fn fix_permissions(path: &Path) -> io::Result<fs::Permissions> {
     let metadata = fs::symlink_metadata(path)?;
     if !metadata.is_file() {
-        return Err(io::Error::other("fix requires a regular file, not a symlink or device"));
+        return Err(io::Error::other(
+            "fix requires a regular file, not a symlink or device",
+        ));
     }
     if metadata.permissions().readonly() {
         return Err(io::Error::other("fix refuses a read-only file"));
@@ -194,7 +204,11 @@ fn files_command(
             let bytes = read_file(path, limit).map_err(|e| format!("cannot read: {e}"))?;
             if !fix {
                 let verdict = classify(&bytes, profile).map_err(|e| describe(&e))?;
-                return Ok(if verdict.is_canonical() { "OK" } else { "NOT CANONICAL" });
+                return Ok(if verdict.is_canonical() {
+                    "OK"
+                } else {
+                    "NOT CANONICAL"
+                });
             }
             let mut wanted = canonical_form(&bytes)?;
             // A finite float can render as a bare integer beyond 2^53-1.
@@ -208,7 +222,8 @@ fn files_command(
                 return Ok("OK");
             }
             if let Some(permissions) = permissions {
-                atomic_replace(path, &wanted, permissions).map_err(|e| format!("cannot replace: {e}"))?;
+                atomic_replace(path, &wanted, permissions)
+                    .map_err(|e| format!("cannot replace: {e}"))?;
             }
             Ok("FIXED")
         })();
@@ -244,7 +259,11 @@ fn records_command(
             let bytes = read_file(path, limit).map_err(|e| format!("cannot read: {e}"))?;
             if !fix {
                 let verdict = classify_records(&bytes).map_err(|e| e.to_string())?;
-                return Ok(if verdict.is_canonical() { "OK" } else { "NOT CANONICAL" });
+                return Ok(if verdict.is_canonical() {
+                    "OK"
+                } else {
+                    "NOT CANONICAL"
+                });
             }
             let wanted = canonicalize_records(&bytes).map_err(|e| e.to_string())?;
             // Same guard as `fix`: never install bytes the strict token profile
@@ -256,7 +275,8 @@ fn records_command(
                 return Ok("OK");
             }
             if let Some(permissions) = permissions {
-                atomic_replace(path, &wanted, permissions).map_err(|e| format!("cannot replace: {e}"))?;
+                atomic_replace(path, &wanted, permissions)
+                    .map_err(|e| format!("cannot replace: {e}"))?;
             }
             Ok("FIXED")
         })();
@@ -319,22 +339,39 @@ fn run(args: &[OsString], out: &mut impl Write) -> io::Result<u8> {
             writeln!(out, "ijson-jcs {}", env!("CARGO_PKG_VERSION"))?;
             return Ok(EXIT_OK);
         } else if options && arg == "--max-bytes" {
-            match args.next().and_then(|v| v.to_str()).and_then(|v| v.parse::<u64>().ok()) {
+            match args
+                .next()
+                .and_then(|v| v.to_str())
+                .and_then(|v| v.parse::<u64>().ok())
+            {
                 Some(n) if n > 0 && n < usize::MAX as u64 => limit = n,
-                _ => return Ok(usage_error("--max-bytes needs a positive, addressable byte count")),
+                _ => {
+                    return Ok(usage_error(
+                        "--max-bytes needs a positive, addressable byte count",
+                    ));
+                }
             }
         } else if options && arg == "--profile" {
-            match args.next().and_then(|v| v.to_str()).and_then(CanonicalProfile::from_name) {
+            match args
+                .next()
+                .and_then(|v| v.to_str())
+                .and_then(CanonicalProfile::from_name)
+            {
                 Some(value) => {
                     profile = value;
                     profile_given = true;
                 }
                 None => {
-                    return Ok(usage_error("--profile needs tolerant, library or estate-file"));
+                    return Ok(usage_error(
+                        "--profile needs tolerant, library or estate-file",
+                    ));
                 }
             }
         } else if options && arg.to_string_lossy().starts_with('-') && arg != "-" {
-            return Ok(usage_error(&format!("unknown option '{}'", arg.to_string_lossy())));
+            return Ok(usage_error(&format!(
+                "unknown option '{}'",
+                arg.to_string_lossy()
+            )));
         } else {
             positional.push(arg);
         }
@@ -348,19 +385,30 @@ fn run(args: &[OsString], out: &mut impl Write) -> io::Result<u8> {
         return Ok(usage_error("--profile applies to 'check' only"));
     }
     match command_name {
-        Some("check" | "fix") if files.is_empty() => Ok(usage_error("check/fix needs at least one FILE")),
-        Some("check" | "fix") => files_command(&files, command_name == Some("fix"), limit, profile, out),
+        Some("check" | "fix") if files.is_empty() => {
+            Ok(usage_error("check/fix needs at least one FILE"))
+        }
+        Some("check" | "fix") => {
+            files_command(&files, command_name == Some("fix"), limit, profile, out)
+        }
         Some("check-jsonl" | "fix-jsonl") if files.is_empty() => {
             Ok(usage_error("check-jsonl/fix-jsonl needs at least one FILE"))
         }
         Some("check-jsonl" | "fix-jsonl") => {
             records_command(&files, command_name == Some("fix-jsonl"), limit, out)
         }
-        Some("canon") if !files.is_empty() => Ok(usage_error("'canon' reads stdin and takes no FILE")),
+        Some("canon") if !files.is_empty() => {
+            Ok(usage_error("'canon' reads stdin and takes no FILE"))
+        }
         Some("canon") => stdin_command(limit, out, canonical_form),
-        Some("jsonld") if !files.is_empty() => Ok(usage_error("'jsonld' reads stdin and takes no FILE")),
+        Some("jsonld") if !files.is_empty() => {
+            Ok(usage_error("'jsonld' reads stdin and takes no FILE"))
+        }
         Some("jsonld") => stdin_command(limit, out, jsonld_form),
-        _ => Ok(usage_error(&format!("unknown command '{}'", command.to_string_lossy()))),
+        _ => Ok(usage_error(&format!(
+            "unknown command '{}'",
+            command.to_string_lossy()
+        ))),
     }
 }
 

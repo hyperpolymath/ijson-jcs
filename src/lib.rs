@@ -111,8 +111,9 @@ pub use error::{CanonicalizationError, IJsonError, ParseMode, ValidationError};
 pub use ijson::{is_i_json, validate_canonicalizable, validate_i_json};
 pub use jcs::{canonicalize, to_jcs, to_jcs_string};
 pub use jsonld::{
-    JSONLD_SCOPE, JsonLdScope, canonicalize_jsonld_document, canonicalize_jsonld_document_to_string,
-    declares_context, supports_rdf_dataset_canonicalization,
+    JSONLD_SCOPE, JsonLdScope, canonicalize_jsonld_document,
+    canonicalize_jsonld_document_to_string, declares_context,
+    supports_rdf_dataset_canonicalization,
 };
 pub use profile::{
     CanonicalProfile, Conformance, FINAL_LF, canonicalize_bytes, classify, estate_file_bytes,

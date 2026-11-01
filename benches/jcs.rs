@@ -36,12 +36,21 @@ fn main() {
     let input = r#"{ "z": [3,2,1], "a": { "x": -0.0, "s": "value" } }"#;
     let expected = br#"{"a":{"s":"value","x":0},"z":[3,2,1]}"#;
     let value = parse_json(input, JsonMode::Canonical).unwrap();
-    let number = Value::Number(serde_json::Number::from_f64(f64::from_bits(0x43143ff3c1cb0959)).unwrap());
+    let number =
+        Value::Number(serde_json::Number::from_f64(f64::from_bits(0x43143ff3c1cb0959)).unwrap());
     let results = vec![
-        measure("parse-strict-v1", || parse_json(black_box(input), JsonMode::Strict).unwrap()["z"] == json!([3,2,1])),
-        measure("validate-value-v1", || validate_i_json(black_box(&value)).is_ok()),
-        measure("canonical-object-v1", || to_jcs(black_box(&value)).unwrap() == expected),
-        measure("canonical-number-v1", || to_jcs(black_box(&number)).unwrap() == b"1424953923781206.2"),
+        measure("parse-strict-v1", || {
+            parse_json(black_box(input), JsonMode::Strict).unwrap()["z"] == json!([3, 2, 1])
+        }),
+        measure("validate-value-v1", || {
+            validate_i_json(black_box(&value)).is_ok()
+        }),
+        measure("canonical-object-v1", || {
+            to_jcs(black_box(&value)).unwrap() == expected
+        }),
+        measure("canonical-number-v1", || {
+            to_jcs(black_box(&number)).unwrap() == b"1424953923781206.2"
+        }),
     ];
     let report = json!({
         "schema_version": 1, "suite": "proven-bench", "reps": REPS,

@@ -150,10 +150,11 @@ pub fn canonicalize_records(input: &[u8]) -> Result<Vec<u8>, FramingError> {
     let records = Records::parse(input)?;
     let mut out = Vec::with_capacity(input.len() + 1);
     for (index, record) in records.iter().enumerate() {
-        let canonical = canonicalize_bytes(record).map_err(|source| FramingError::InvalidRecord {
-            line: index + 1,
-            source,
-        })?;
+        let canonical =
+            canonicalize_bytes(record).map_err(|source| FramingError::InvalidRecord {
+                line: index + 1,
+                source,
+            })?;
         out.extend_from_slice(&canonical);
         out.push(b'\n');
     }

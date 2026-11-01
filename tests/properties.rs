@@ -7,10 +7,13 @@ use proptest::test_runner::RngSeed;
 
 fn text() -> impl Strategy<Value = String> {
     prop::collection::vec(any::<char>(), 0..32).prop_map(|chars| {
-        chars.into_iter().filter(|c| {
-            let n = *c as u32;
-            !(0xfdd0..=0xfdef).contains(&n) && n & 0xffff < 0xfffe
-        }).collect()
+        chars
+            .into_iter()
+            .filter(|c| {
+                let n = *c as u32;
+                !(0xfdd0..=0xfdef).contains(&n) && n & 0xffff < 0xfffe
+            })
+            .collect()
     })
 }
 
@@ -23,11 +26,13 @@ fn value() -> impl Strategy<Value = Value> {
         (-1e15f64..1e15).prop_map(|f| Value::Number(serde_json::Number::from_f64(f).unwrap())),
         text().prop_map(Value::String),
     ];
-    leaf.prop_recursive(4, 64, 8, |inner| prop_oneof![
-        prop::collection::vec(inner.clone(), 0..8).prop_map(Value::Array),
-        prop::collection::btree_map(text(), inner, 0..8)
-            .prop_map(|entries| Value::Object(entries.into_iter().collect())),
-    ])
+    leaf.prop_recursive(4, 64, 8, |inner| {
+        prop_oneof![
+            prop::collection::vec(inner.clone(), 0..8).prop_map(Value::Array),
+            prop::collection::btree_map(text(), inner, 0..8)
+                .prop_map(|entries| Value::Object(entries.into_iter().collect())),
+        ]
+    })
 }
 
 proptest! {

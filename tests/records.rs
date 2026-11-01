@@ -34,7 +34,11 @@ fn temp_file(name: &str, contents: &[u8]) -> PathBuf {
 
 /// Run `ijson-jcs check-jsonl|fix-jsonl` over `paths`.
 fn run_on(command: &str, paths: &[&PathBuf]) -> Output {
-    bin().arg(command).args(paths).output().expect("run ijson-jcs")
+    bin()
+        .arg(command)
+        .args(paths)
+        .output()
+        .expect("run ijson-jcs")
 }
 
 /// The framing matrix: what the estate gate prints, and what the CLI exits with.
@@ -66,7 +70,12 @@ fn framing_matrix() {
 
         let path = temp_file("records.jsonl", input);
         let out = run_on("check-jsonl", &[&path]);
-        assert_eq!(out.status.code(), Some(*want_exit), "CLI exit for {:?}", shown);
+        assert_eq!(
+            out.status.code(),
+            Some(*want_exit),
+            "CLI exit for {:?}",
+            shown
+        );
         assert!(
             String::from_utf8_lossy(&out.stdout).starts_with(match *want_exit {
                 0 => "OK ",
@@ -89,7 +98,11 @@ fn errors_name_the_line() {
 
     let invalid = canonicalize_records(b"{}\n{}\nnot json\n").unwrap_err();
     assert_eq!(invalid.line(), 3);
-    assert!(invalid.to_string().starts_with("line 3 is not valid I-JSON"));
+    assert!(
+        invalid
+            .to_string()
+            .starts_with("line 3 is not valid I-JSON")
+    );
 
     let duplicate = canonicalize_records(b"{\"k\":1}\n{\"k\":1,\"k\":2}\n").unwrap_err();
     assert_eq!(duplicate.line(), 2);
@@ -139,7 +152,11 @@ fn fix_jsonl_leaves_invalid_files_untouched() {
         let good = temp_file("good.jsonl", b"{\"z\":1,\"a\":0}\n");
         let out = run_on("fix-jsonl", &[&bad, &good]);
         assert_eq!(out.status.code(), Some(2), "{name}");
-        assert_eq!(fs::read(&bad).unwrap(), contents, "{name} must not be rewritten");
+        assert_eq!(
+            fs::read(&bad).unwrap(),
+            contents,
+            "{name} must not be rewritten"
+        );
         // A valid file next to an invalid one is still processed.
         assert_eq!(fs::read(&good).unwrap(), b"{\"a\":0,\"z\":1}\n", "{name}");
     }
@@ -184,9 +201,21 @@ fn unusable_inputs_are_exit_two() {
     let directory = path.parent().unwrap().to_path_buf();
     let missing = path.with_file_name("missing.jsonl");
     for command in ["check-jsonl", "fix-jsonl"] {
-        assert_eq!(run_on(command, &[&directory]).status.code(), Some(2), "{command} dir");
-        assert_eq!(run_on(command, &[&missing]).status.code(), Some(2), "{command} missing");
-        assert_eq!(bin().arg(command).output().unwrap().status.code(), Some(2), "{command} no args");
+        assert_eq!(
+            run_on(command, &[&directory]).status.code(),
+            Some(2),
+            "{command} dir"
+        );
+        assert_eq!(
+            run_on(command, &[&missing]).status.code(),
+            Some(2),
+            "{command} missing"
+        );
+        assert_eq!(
+            bin().arg(command).output().unwrap().status.code(),
+            Some(2),
+            "{command} no args"
+        );
     }
 }
 

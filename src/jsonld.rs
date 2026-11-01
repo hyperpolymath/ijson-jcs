@@ -122,9 +122,11 @@ mod tests {
             canonicalize_jsonld_document_to_string(input).unwrap(),
             String::from_utf8(canonical.clone()).unwrap()
         );
-        assert!(classify(&canonical, CanonicalProfile::LibraryBytes)
-            .unwrap()
-            .is_canonical());
+        assert!(
+            classify(&canonical, CanonicalProfile::LibraryBytes)
+                .unwrap()
+                .is_canonical()
+        );
     }
 
     /// Array order inside `@context` is data, not something to sort.

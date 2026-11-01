@@ -47,7 +47,8 @@ fn is_revision(value: &str) -> bool {
 
 /// Every regular file under `dir`, recursively.
 fn files_under(dir: &Path, out: &mut Vec<PathBuf>) {
-    for entry in fs::read_dir(dir).unwrap_or_else(|e| panic!("cannot read {}: {e}", dir.display())) {
+    for entry in fs::read_dir(dir).unwrap_or_else(|e| panic!("cannot read {}: {e}", dir.display()))
+    {
         let path = entry.expect("directory entry").path();
         if path.is_dir() {
             files_under(&path, out);
@@ -69,7 +70,9 @@ fn manifest_entries(relative: &str) -> Vec<(String, String)> {
             .unwrap_or_else(|| panic!("{relative}: not `<sha256>  <path>`: {line:?}"));
         assert_eq!(digest.len(), 64, "{relative}: {line:?}");
         assert!(
-            digest.bytes().all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b)),
+            digest
+                .bytes()
+                .all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b)),
             "{relative}: digest is not lowercase hex: {digest}"
         );
         assert!(
@@ -132,7 +135,10 @@ fn manifest_is_sorted_and_unique() {
     let mut sorted = paths.clone();
     sorted.sort_unstable();
     sorted.dedup();
-    assert_eq!(paths, sorted, ".ci/standards.sha256 is not sorted or has duplicates");
+    assert_eq!(
+        paths, sorted,
+        ".ci/standards.sha256 is not sorted or has duplicates"
+    );
 }
 
 /// Every path the contract depends on is pinned, and every role is known.
@@ -207,10 +213,24 @@ fn revision_log_ends_at_the_pin() {
     let records: Vec<&str> = lines.collect();
     for record in &records {
         let fields: Vec<&str> = record.split('\t').collect();
-        assert_eq!(fields.len(), 5, "revision record is not five fields: {record:?}");
-        assert!(is_revision(fields[1]), "revision is not a commit: {record:?}");
-        assert!(is_revision(fields[2]), "previous revision is not a commit: {record:?}");
-        assert_eq!(fields[3].len(), 64, "manifest digest is not sha256: {record:?}");
+        assert_eq!(
+            fields.len(),
+            5,
+            "revision record is not five fields: {record:?}"
+        );
+        assert!(
+            is_revision(fields[1]),
+            "revision is not a commit: {record:?}"
+        );
+        assert!(
+            is_revision(fields[2]),
+            "previous revision is not a commit: {record:?}"
+        );
+        assert_eq!(
+            fields[3].len(),
+            64,
+            "manifest digest is not sha256: {record:?}"
+        );
         assert!(
             fields[0].ends_with('Z') && fields[0].contains('T'),
             "date is not ISO 8601 UTC: {record:?}"
@@ -248,15 +268,16 @@ fn receipts_are_estate_canonical_and_accepted() {
             "{} is not canonical bytes plus exactly one LF",
             path.display()
         );
-        let value: serde_json::Value =
-            serde_json::from_slice(&bytes).expect("receipt is JSON");
+        let value: serde_json::Value = serde_json::from_slice(&bytes).expect("receipt is JSON");
         assert_eq!(
-            value["schema"], "ijson-jcs/standards-receipt/1",
+            value["schema"],
+            "ijson-jcs/standards-receipt/1",
             "{} has an unknown schema",
             path.display()
         );
         assert_eq!(
-            value["verdict"], "accepted",
+            value["verdict"],
+            "accepted",
             "{} is not an accepted receipt",
             path.display()
         );
@@ -280,7 +301,14 @@ fn receipts_are_estate_canonical_and_accepted() {
 fn kyq_vectors_are_complete_and_sealed() {
     let vectors = root().join("interop/kyq/vectors");
     assert!(vectors.is_dir(), "interop/kyq/vectors is missing");
-    let commands = ["canon", "check", "fix", "check-jsonl", "fix-jsonl", "jsonld"];
+    let commands = [
+        "canon",
+        "check",
+        "fix",
+        "check-jsonl",
+        "fix-jsonl",
+        "jsonld",
+    ];
     let mut dirs = 0;
     for entry in fs::read_dir(&vectors).expect("read interop/kyq/vectors") {
         let dir = entry.expect("directory entry").path();
@@ -288,11 +316,17 @@ fn kyq_vectors_are_complete_and_sealed() {
             continue;
         }
         dirs += 1;
-        let name = dir.file_name().and_then(|n| n.to_str()).unwrap_or("<non-utf8>");
+        let name = dir
+            .file_name()
+            .and_then(|n| n.to_str())
+            .unwrap_or("<non-utf8>");
         let cmd = fs::read_to_string(dir.join("cmd"))
             .unwrap_or_else(|e| panic!("{name}: no cmd file: {e}"));
         let first = cmd.split_whitespace().next().unwrap_or("");
-        assert!(commands.contains(&first), "{name}: unknown command {first:?}");
+        assert!(
+            commands.contains(&first),
+            "{name}: unknown command {first:?}"
+        );
         assert!(dir.join("stdin").is_file(), "{name}: no stdin file");
         let exit = fs::read_to_string(dir.join("expect.exit"))
             .unwrap_or_else(|e| panic!("{name}: no expect.exit: {e}"));

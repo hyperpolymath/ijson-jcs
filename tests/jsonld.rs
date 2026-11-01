@@ -8,7 +8,8 @@ use std::process::{Command, Output, Stdio};
 
 use ijson_jcs::{
     JSONLD_SCOPE, JsonLdScope, canonicalize_jsonld_document,
-    canonicalize_jsonld_document_to_string, declares_context, supports_rdf_dataset_canonicalization,
+    canonicalize_jsonld_document_to_string, declares_context,
+    supports_rdf_dataset_canonicalization,
 };
 
 /// Run `ijson-jcs jsonld` with `input` on stdin.
@@ -56,7 +57,8 @@ fn cli_prints_library_bytes() {
 /// A remote `@context` is never fetched: it stays an inert string.
 #[test]
 fn remote_contexts_are_not_fetched() {
-    let input = br#"{"@context": "https://example.invalid/context-that-does-not-exist", "@id": "x"}"#;
+    let input =
+        br#"{"@context": "https://example.invalid/context-that-does-not-exist", "@id": "x"}"#;
     let out = jsonld(input);
     assert_eq!(out.status.code(), Some(0));
     assert_eq!(
@@ -77,7 +79,12 @@ fn invalid_documents_exit_two() {
         b"[\"\\xff\"]",
     ] {
         let out = jsonld(bad);
-        assert_eq!(out.status.code(), Some(2), "{:?}", String::from_utf8_lossy(bad));
+        assert_eq!(
+            out.status.code(),
+            Some(2),
+            "{:?}",
+            String::from_utf8_lossy(bad)
+        );
         assert!(out.stdout.is_empty());
         assert!(
             String::from_utf8_lossy(&out.stderr).starts_with("INVALID <stdin>:"),

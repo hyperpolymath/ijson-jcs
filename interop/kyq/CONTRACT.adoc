@@ -1,0 +1,88 @@
+// SPDX-License-Identifier: MPL-2.0
+// SPDX-FileCopyrightText: 2026 Hyperpolymath Estate
+= ijson-jcs → kyq contract (v1)
+:toc:
+
+This is the contract `metadatastician/kyq` inherits from
+`hyperpolymath/ijson-jcs`, in the form kyq can test against: prose here, bytes
+in `vectors/`. It is a *drop*, generated from one immutable revision of the
+implementation and reviewed as a pull request in kyq. It is not a floating
+reference to `main`.
+
+== What kyq inherits
+
+. **Validation mode.** Any kyq entry point that touches canonical JSON parses
+  in `ijson_jcs::JsonMode::Canonical`: UTF-8, no duplicate member names, no
+  lone surrogates, no noncharacters, numbers representable as IEEE 754 doubles,
+  integers within ±(2^53−1).
+. **Canonical bytes.** For the same logical value, kyq produces byte-equal
+  output to `ijson_jcs::to_jcs(&value)`: UTF-8, members sorted by *UTF-16 code
+  unit*, no insignificant whitespace, numbers per ECMAScript `JSON.stringify`.
+  Idempotent: `to_jcs(parse(to_jcs(v))) == to_jcs(v)`.
+. **Library bytes versus the estate file profile.** JCS bytes carry no trailing
+  line feed; a file on disk carries exactly one (JSON-POLICY J-1). `check`
+  accepts either form by default; `check --profile estate-file` accepts only
+  the file form; `check --profile library` accepts only the hash form.
+. **CLI surface.** `check`, `fix`, `canon`, `check-jsonl`, `fix-jsonl`,
+  `jsonld`, with the exit codes in `README.md`. `--` ends option parsing.
+. **JSON Lines framing.** One record per line, no blank lines, one final line
+  feed; a missing final line feed is *not canonical*, a blank line is *invalid*.
+. **JSON-LD.** Document bytes are canonicalised; contexts are never fetched,
+  expanded or compacted. This is **not** RDF dataset canonicalisation
+  (RDFC-1.0 / URDNA2015) and must not be described as such.
+
+== What kyq must not infer
+
+* A validator that returns success for every input is not a gate. The vectors
+  in `vectors/` are the gate: they include inputs that must be *rejected*, with
+  the exit code and the error class the implementation produces.
+* A `yq` alias, an external binary that happens to be on `PATH`, or a passing
+  YAML parse does not stand in for I-JSON/JCS conformance.
+* Verifying these vectors is not by itself kyq readiness. kyq's own suite, its
+  lock-sync gate and the estate gates still have to pass.
+
+== Layout
+
+[cols="1,3",options="header"]
+|===
+| Path | Meaning
+
+| `vectors/<id>/cmd`
+| The subcommand and flags. The binary is always given a file named
+  `filename` (default `case.json`) or, for `canon`/`jsonld`, the same bytes on
+  stdin.
+
+| `vectors/<id>/stdin`
+| The exact input bytes.
+
+| `vectors/<id>/expect.exit`
+| The exit code, one of 0, 1 or 2.
+
+| `vectors/<id>/expect.stdout`
+| The exact stdout bytes, when recorded.
+
+| `vectors/<id>/expect.stdout_prefix`
+| The first stdout line, for messages that carry a reason after it.
+
+| `vectors/<id>/expect.stderr_contains`
+| A substring stderr must contain.
+
+| `vectors/<id>/expect.file`
+| The exact file contents after the run, for `fix` and `fix-jsonl`.
+
+| `vectors.sha256`
+| sha256 of every file above. Checked before the vectors are run, so a vector
+  cannot be re-baselined to match a regression without the change showing up
+  in review.
+|===
+
+== How a change to this contract happens
+
+1. `scripts/standards/kyq-vectors.sh write` re-records the expectations from a
+   built binary and rewrites `vectors.sha256`.
+2. `scripts/standards/verify.sh` runs the recorded vectors against the same
+   binary, plus the rest of the standards pipeline, and writes a receipt.
+3. `.github/workflows/kyq-sync.yml` copies this directory into kyq as
+   `interop/ijson-jcs/` on a branch and opens one pull request, whose body
+   names the ijson-jcs revision and the receipt.
+4. A human merges it in kyq. Nothing here pushes to kyq directly.

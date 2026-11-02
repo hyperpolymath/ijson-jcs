@@ -1,6 +1,9 @@
 # SPDX-License-Identifier: MPL-2.0
 # Revisions are immutable. Updating one requires the corresponding tests to run.
 readonly STANDARDS_REPOSITORY='metadatastician/standards'
+# Archive host used by scripts/standards/fetch.sh. Overridable so the pipeline
+# can be tested without the network (file:// or a local directory server).
+readonly STANDARDS_URL_BASE="${STANDARDS_URL_BASE:-https://codeload.github.com}"
 readonly STANDARDS_REV='8e48b1caade08a552646adeab66558ac43b4360d'
 readonly PROVEN_REV='eca682bcd419554f6779e72969902e6faef4fd9d'
 readonly PONS_REV='51b8920f541782ceb9465ea3f0d33c96104fc1fb'

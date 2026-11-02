@@ -45,7 +45,7 @@ use serde_json::Value;
 use std::cmp::Ordering;
 
 use crate::error::CanonicalizationError;
-use crate::ijson::{self, SAFE_INT_MIN, SAFE_INT_MAX, SAFE_UINT_MAX};
+use crate::ijson::{self, SAFE_INT_MAX, SAFE_INT_MIN, SAFE_UINT_MAX};
 
 /// Canonicalize a JSON value to JCS format (RFC 8785)
 ///

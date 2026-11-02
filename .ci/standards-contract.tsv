@@ -1,0 +1,29 @@
+# SPDX-License-Identifier: MPL-2.0
+# Normative dependencies of this implementation on metadatastician/standards,
+# at the revision in .ci/pins.sh. Three TAB-separated fields per line:
+#
+#   role<TAB>path<TAB>literal
+#
+# scripts/standards/contract.sh asserts that every literal still appears in
+# the pinned file. That is how a revision that keeps every filename but moves
+# the goalposts is caught: a hash mismatch cannot see it, because the new file
+# is a valid new policy. Removing or reflowing a pinned sentence in standards
+# therefore stops this repository's update proposal at exit 3, for a human to
+# rule on, instead of silently retargeting the tests.
+#
+# role: rule-j-1, rule-j-2, gate, gate-test
+rule-j-1	3-practice/JSON-POLICY.adoc	Rule J-1: JSON is I-JSON, serialised by JCS
+rule-j-1	3-practice/JSON-POLICY.adoc	no duplicate member names
+rule-j-1	3-practice/JSON-POLICY.adoc	followed by exactly one line feed
+rule-j-2	3-practice/JSON-POLICY.adoc	Rule J-2: JSON Lines is one canonical record per line
+rule-j-2	3-practice/JSON-POLICY.adoc	No blank lines
+gate	3-practice/JSON-POLICY.adoc	proves the gate can fail
+gate	scripts/check-ijson-jcs.sh	IJSON_JCS="${IJSON_JCS:-ijson-jcs}"
+gate	scripts/check-ijson-jcs.sh	--enforce
+gate	scripts/check-ijson-jcs.sh	classify_jsonl
+gate	scripts/check-ijson-jcs.sh	is_jsonc_carve_out
+gate	scripts/check-ijson-jcs.sh	a gate that cannot look must not report a pass
+gate-test	scripts/tests/check-ijson-jcs-test.sh	a missing ijson-jcs binary exits 2
+gate-test	scripts/tests/check-ijson-jcs-test.sh	a missing path exits 2
+gate-test	scripts/tests/check-ijson-jcs-test.sh	a .jsonl without a final newline fails --enforce
+gate-test	scripts/tests/check-ijson-jcs-test.sh	an unsorted .json fails --enforce

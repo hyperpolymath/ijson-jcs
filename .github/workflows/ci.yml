@@ -7,7 +7,6 @@
     push: {
       branches: [
         "main",
-        "arena/d216802e-ijson-jcs",
       ],
     },
     merge_group: {},
@@ -34,11 +33,7 @@
         },
         {
           name: "Install pinned Rust toolchain",
-          run: "rustup show active-toolchain",
-        },
-        {
-          name: "Bootstrap registry lock and formatting",
-          run: "bash scripts/ci/run.sh bootstrap bash scripts/ci/bootstrap.sh",
+          run: "set -euo pipefail\ncommand -v rustup >/dev/null || { echo '::error::rustup is not on this runner, so the toolchain pinned in rust-toolchain.toml cannot be installed'; exit 2; }\nrustup show active-toolchain",
         },
         {
           name: "Test library, CLI and documentation",
@@ -51,6 +46,47 @@
         {
           name: "Clippy",
           run: "bash scripts/ci/run.sh clippy cargo clippy --locked --all-targets --all-features -- -D warnings",
+        },
+      ],
+    },
+    standards: {
+      name: "Standards pipeline",
+      runs-on: "ubuntu-24.04",
+      timeout-minutes: 45,
+      steps: [
+        {
+          uses: "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1", # v7.0.1
+          with: {
+            persist-credentials: false,
+            fetch-depth: 0,
+            # The receipt records HEAD as source.commit. On a pull request the
+            # default checkout is the ephemeral merge ref, which is not a
+            # revision anyone can fetch later, so check out the real head.
+            ref: "${{ github.event.pull_request.head.sha || github.sha }}",
+          },
+        },
+        {
+          name: "Install pinned Rust toolchain",
+          run: "set -euo pipefail\ncommand -v rustup >/dev/null || { echo '::error::rustup is not on this runner, so the toolchain pinned in rust-toolchain.toml cannot be installed'; exit 2; }\nrustup show active-toolchain",
+        },
+        {
+          # No binary and no network needed: this is the durable part.
+          name: "Pipeline self-test (fetch, contract, detect, propose)",
+          run: "bash scripts/tests/standards-inputs-test.sh",
+        },
+        {
+          # Fail-closed: pinned inputs, contract, build, tests, the pinned
+          # standards gate and its failure controls, profile/JSONL/JSON-LD
+          # vectors, and the receipt itself. A missing tool or fixture fails
+          # this step; nothing here is allowed to skip.
+          name: "Verify the pinned standards revision",
+          run: "bash scripts/ci/run.sh standards bash scripts/standards/verify.sh --receipt target/ci/receipt.json --label ci",
+        },
+        {
+          # The receipt is the run's evidence; it is short enough to publish as
+          # one annotation, which is also how it is copied into .ci/receipts/.
+          name: "Publish the receipt",
+          run: "printf '::notice title=standards-receipt::%s\\n' \"$(cat target/ci/receipt.json)\"",
         },
       ],
     },

@@ -1,0 +1,101 @@
+# SPDX-License-Identifier: MPL-2.0
+# KYAML content; GitHub requires the .yml extension.
+#
+# Automatically track metadatastician/standards: detect a revision, prove the
+# candidate, and open ONE reviewable pull request with the evidence.
+#
+# Nothing here follows main at run time. The proposal moves an immutable pin,
+# carries the receipt from verify.sh, and is merged by a human. If detection
+# cannot reach the remote, or the candidate fails any step, the job fails and
+# no pull request is opened.
+{
+  name: "Standards update proposal",
+  on: {
+    schedule: [
+      {
+        # Daily. Any drift is proposed once, not once per day: the branch name
+        # carries the candidate revision, so a rerun updates the same request.
+        cron: "23 4 * * *",
+      },
+    ],
+    workflow_dispatch: {
+      inputs: {
+        rev: {
+          description: "Candidate standards revision (40-hex); blank means the upstream head",
+          required: false,
+          type: "string",
+        },
+      },
+    },
+  },
+  permissions: {
+    contents: "write",
+    pull-requests: "write",
+  },
+  concurrency: {
+    group: "standards-update",
+    cancel-in-progress: false,
+  },
+  jobs: {
+    propose: {
+      name: "Detect, verify and propose",
+      runs-on: "ubuntu-24.04",
+      timeout-minutes: 60,
+      steps: [
+        {
+          uses: "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1", # v7.0.1
+          with: {
+            persist-credentials: false,
+            fetch-depth: 0,
+          },
+        },
+        {
+          name: "Install pinned Rust toolchain",
+          run: "set -euo pipefail\ncommand -v rustup >/dev/null || { echo '::error::rustup is not on this runner, so the toolchain pinned in rust-toolchain.toml cannot be installed'; exit 2; }\nrustup show active-toolchain",
+        },
+        {
+          id: "detect",
+          name: "Detect drift against the pinned revision",
+          # 0 = no drift, 1 = drift, anything else = cannot look, which fails.
+          env: {
+            REV: "${{ inputs.rev }}",
+          },
+          run: "mkdir -p target/ci; status=0; if [ -n \"$REV\" ]; then bash scripts/standards/detect.sh --head \"$REV\" > target/ci/detect.txt 2>&1 || status=$?; else bash scripts/standards/detect.sh > target/ci/detect.txt 2>&1 || status=$?; fi; cat target/ci/detect.txt; case \"$status\" in 0) echo 'drift=false' >> \"$GITHUB_OUTPUT\" ;; 1) echo 'drift=true' >> \"$GITHUB_OUTPUT\"; echo \"head=$(sed -n 's/^head=//p' target/ci/detect.txt)\" >> \"$GITHUB_OUTPUT\" ;; *) echo '::error::cannot determine the standards head; refusing to propose'; exit 2 ;; esac",
+        },
+        {
+          name: "Prepare the proposal (pin, manifest, revision log)",
+          if: "steps.detect.outputs.drift == 'true'",
+          run: "bash scripts/standards/propose.sh --rev \"${{ steps.detect.outputs.head }}\" | tee target/ci/proposal.txt",
+        },
+        {
+          name: "Verify the candidate binary against the candidate revision",
+          if: "steps.detect.outputs.drift == 'true'",
+          # Fail-closed: pinned inputs, contract, cargo build, cargo test, the
+          # pinned standards gate and its controls, profile/JSONL/JSON-LD
+          # vectors, kyq vectors. Missing tool or fixture fails here too.
+          run: "bash scripts/ci/run.sh standards-proposal bash scripts/standards/verify.sh --rev \"${{ steps.detect.outputs.head }}\" --receipt \".ci/receipts/$(date -u +%Y-%m-%dT%H%M%SZ)-${{ steps.detect.outputs.head }}.json\" --label standards-update",
+        },
+        {
+          name: "Publish the receipt in the job summary",
+          if: "steps.detect.outputs.drift == 'true'",
+          run: "printf '::notice title=standards-receipt::%s\\n' \"$(cat .ci/receipts/*.json | tail -n 1)\"",
+        },
+        {
+          id: "publish",
+          name: "Push the branch and open the pull request",
+          if: "steps.detect.outputs.drift == 'true'",
+          env: {
+            # The authorised estate mechanism, when it is provisioned. Falling
+            # back to the workflow token keeps the same-repository proposal
+            # working, and the pull request says which one was used.
+            ESTATE_TOKEN: "${{ secrets.STANDARDS_UPDATE_TOKEN }}",
+            GH_TOKEN: "${{ secrets.STANDARDS_UPDATE_TOKEN || github.token }}",
+            STANDARDS_SIGNING_KEY: "${{ secrets.STANDARDS_SIGNING_KEY }}",
+            STANDARDS_SIGNING_KEY_ID: "${{ secrets.STANDARDS_SIGNING_KEY_ID }}",
+          },
+          run: "bash scripts/ci/run.sh standards-publish bash scripts/standards/publish-proposal.sh \"${{ steps.detect.outputs.head }}\"",
+        },
+      ],
+    },
+  },
+}

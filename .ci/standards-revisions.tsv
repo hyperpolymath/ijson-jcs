@@ -1,0 +1,6 @@
+# SPDX-License-Identifier: MPL-2.0
+# Append-only log of accepted standards revisions. One TAB-separated record per
+# accepted pin: date, revision, previous revision, manifest sha256, source commit.
+# A proposal appends here and never rewrites an earlier line: the historical
+# bytes of an accepted revision stay recorded after the pin moves on.
+date	revision	previous	manifest_sha256	source

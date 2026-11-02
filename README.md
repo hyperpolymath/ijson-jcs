@@ -18,18 +18,38 @@ projection belongs to kyX. JSONL/NDJSON retain record framing; JSON-LD retains
 its contexts and graph semantics. JCS is not RDF dataset canonicalisation.
 
 Canonical policy lives in
-[metadatastician/standards](https://github.com/metadatastician/standards/blob/main/3-practice/JSON-POLICY.adoc),
-with the four-format boundary in `3-practice/DATA-FORMAT-ROUTING.adoc`.
-The estate file profile requires exactly one final LF; the library CLI also
-accepts canonical bytes without one, so CLI acceptance alone is not that
-entire on-disk policy. Keep the standards wrapper's framing checks.
+[metadatastician/standards](https://github.com/metadatastician/standards/blob/main/3-practice/JSON-POLICY.adoc)
+at the revision pinned in `.ci/pins.sh`; the four-format boundary is the estate
+routing decision described above and in the routing correction it came from. (An
+earlier revision of this README cited `3-practice/DATA-FORMAT-ROUTING.adoc`;
+that path exists at neither the pinned revision nor `main`, which is the class
+of stale reference `.ci/standards-contract.tsv` and the pipeline below exist to
+catch.)
 
-This repository must automatically track standards with tested update
-proposals for immutable revisions, running both library/CLI tests and the
-standards JSON-policy fixtures against the candidate. **That update mechanism
-is not yet installed here.** Do not claim a floating branch or an unrun test
-as synchronisation. Likewise, kyq's current build/validator stubs are not an
-operational gate; direct use of this CLI is transitional enforcement.
+The estate file profile requires exactly one final LF; `check` also accepts
+canonical bytes without one, so CLI acceptance alone is not that entire on-disk
+policy. Ask for it explicitly with `check --profile estate-file`.
+
+### Standards tracking
+
+Tracking is installed, and deliberately two steps apart:
+
+* `.ci/pins.sh` pins an immutable revision; `.ci/standards.sha256` records the
+  sha256 of every input it contributes; `.ci/standards-contract.tsv` records the
+  normative sentences this implementation is tested against, so a revision that
+  keeps the filenames but rewords a rule is `INCOMPATIBLE POLICY CHANGE`, not a
+  hash diff to wave through.
+* A daily workflow detects drift, runs the pinned standards gate and its own
+  test against a candidate build, and opens **one reviewable pull request** with
+  the receipt. Nothing follows `main` at run time.
+
+See [docs/standards-update.adoc](docs/standards-update.adoc) for each step, the
+negative controls that keep the gate from passing vacuously, and the two things
+only the owner can provision (the estate signing key, and the kyq sync token).
+
+kyq's current build/validator stubs are still not an operational gate; direct
+use of this CLI is transitional enforcement, and `interop/kyq/` is the contract
+kyq has to satisfy rather than evidence that it does.
 
 ## Features
 
@@ -171,12 +191,44 @@ cargo install --path .         # or install it on your PATH
 ```
 
 ```text
-ijson-jcs check FILE...    Report whether each FILE is canonical
-ijson-jcs fix FILE...      Rewrite each valid FILE in canonical form
-ijson-jcs canon            Canonicalise stdin to stdout
-ijson-jcs --help           Show help
-ijson-jcs --version        Show the version
+ijson-jcs check FILE...        Report whether each FILE is canonical
+ijson-jcs fix FILE...          Rewrite each valid FILE in canonical form
+ijson-jcs canon                Canonicalise stdin to stdout (JCS bytes, no LF)
+ijson-jcs check-jsonl FILE...  Report whether each JSON Lines FILE is canonical
+ijson-jcs fix-jsonl FILE...    Rewrite each JSON Lines FILE, one record per line
+ijson-jcs jsonld               Canonicalise a JSON-LD document on stdin
+ijson-jcs --help               Show help
+ijson-jcs --version            Show the version
 ```
+
+### Library bytes, the estate file profile, and `--profile`
+
+Three byte strings are all "canonical" for something, and conflating them is
+how a hash ends up covering a trailing newline:
+
+| Profile | Bytes | Use |
+|---|---|---|
+| `library` | `to_jcs(value)` | hashing, signing, the wire, `canon` |
+| `estate-file` | `to_jcs(value)` + exactly one `\n` | files on disk (JSON-POLICY J-1), `fix` |
+| `tolerant` | either (default) | the historical `check`, which consumers rely on |
+
+```bash
+ijson-jcs check --profile estate-file data.json   # the on-disk rule
+ijson-jcs check --profile library data.json       # the hash form
+```
+
+`--profile` applies to `check` only; `fix` always writes the estate file form
+and `canon`/`jsonld` always print library bytes, so passing it there is a usage
+error rather than a silent no-op.
+
+**JSON Lines.** `check-jsonl`/`fix-jsonl` apply the same verdicts one record per
+line: no blank lines, one record per line, exactly one final line feed. A
+missing final line feed is `NOT CANONICAL`; a blank line is `INVALID`.
+
+**JSON-LD.** `jsonld` canonicalises a JSON-LD *document* — contexts are never
+fetched, expanded or compacted. This is **not** RDF dataset canonicalisation
+(RDFC-1.0 / URDNA2015); `supports_rdf_dataset_canonicalization()` returns
+`false`.
 
 Input is always parsed as strict I-JSON (`JsonMode::Canonical`): duplicate
 keys, lone surrogates, noncharacters, invalid UTF-8, numbers outside the
@@ -331,16 +383,27 @@ MPL-2.0 (Mozilla Public License 2.0)
 ijson-jcs/
 ├── Cargo.toml          # Package manifest
 ├── README.md           # This file
+├── .ci/
+│   ├── pins.sh                 # Immutable revisions (standards, kyq, …)
+│   ├── standards.sha256        # sha256 of every pinned standards input
+│   ├── standards-contract.tsv  # Normative sentences this crate is tested against
+│   ├── standards-revisions.tsv # Append-only log of accepted revisions
+│   └── receipts/               # Accepted verification receipts (canonical JSON)
+├── scripts/standards/          # fetch, contract, detect, propose, verify, publish
+├── interop/kyq/                # Contract drop + differential vectors for kyq
 ├── src/
 │   ├── lib.rs          # Main exports and convenience functions
 │   ├── error.rs        # Comprehensive error types
 │   ├── ijson.rs        # I-JSON validation implementation
 │   ├── jcs.rs          # JCS canonicalization implementation
+│   ├── profile.rs      # Library bytes vs the estate file profile
+│   ├── records.rs      # JSON Lines / NDJSON record framing
+│   ├── jsonld.rs       # JSON-LD document bytes (not RDF datasets)
 │   ├── strict.rs       # Duplicate-key-rejecting parser (strict modes)
 │   └── bin/
 │       └── ijson-jcs.rs  # Command-line tool
-├── tests/
-│   └── cli.rs          # Integration tests for the CLI
+├── tests/              # cli, profile, records, jsonld, properties, rfc8785,
+│                       # conformance, pipeline, standards_pin
 └── target/             # Build artifacts (gitignored)
 ```
 
@@ -356,7 +419,7 @@ ijson-jcs/
 ## Testing
 
 ```bash
-# Run all tests
+# Run all tests (including the standards pipeline's own 61 controls)
 cargo test
 
 # Run with coverage
@@ -367,9 +430,26 @@ cargo test test_duplicate_keys
 cargo test --doc
 ```
 
+Standards pipeline, by hand:
+
+```bash
+# Has the pinned standards revision moved? 0 no drift, 1 drift, 2 cannot look.
+scripts/standards/detect.sh
+
+# The pipeline's failure modes, without a toolchain or the network.
+scripts/tests/standards-inputs-test.sh
+
+# Prove a built binary against the pinned revision, writing a receipt.
+scripts/standards/verify.sh --receipt target/ci/receipt.json
+
+# Replay the kyq differential vectors.
+scripts/standards/kyq-vectors.sh verify --binary target/release/ijson-jcs
+```
+
 ## Future Enhancements
 
-- [ ] RFC 8785 official test vectors integration
+- [ ] RFC 8785 official test vectors integration (Appendix B is covered in
+      `tests/rfc8785.rs`; the full published corpus is not vendored)
 - [ ] FFI bindings for other languages (C, Python, Node.js)
 - [ ] WASM compilation for browser/Node.js usage
 - [ ] Integration with existing estate JSON handling code

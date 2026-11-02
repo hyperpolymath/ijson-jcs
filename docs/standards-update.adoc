@@ -1,0 +1,284 @@
+// SPDX-License-Identifier: MPL-2.0
+// SPDX-FileCopyrightText: 2026 Hyperpolymath Estate
+= Tracking metadatastician/standards with a tested update pipeline
+:toc: macro
+:toclevels: 3
+
+This document describes the mechanism that keeps this implementation aligned
+with `metadatastician/standards` without following `main` at run time, and what
+each part has actually been proven to do.
+
+toc::[]
+
+== The problem it solves
+
+The estate rules JSON through `3-practice/JSON-POLICY.adoc` (owner ruling D306)
+and enforces it with `scripts/check-ijson-jcs.sh`, whose own failure modes are
+proven by `scripts/tests/check-ijson-jcs-test.sh`. This repository implements
+the tool those scripts call. Three things can go wrong, and only one of them is
+a bug in this repository:
+
+. **The policies move.** A revision can keep every filename and still reword
+  rule J-1, drop the "exactly one line feed" sentence, or remove the `--enforce`
+  mode the gate depends on. A hash comparison sees a different file; it cannot
+  say whether the difference matters.
+. **The tools move.** The gate script and its test encode behaviour this CLI
+  has to satisfy (the three verdicts, the JSONC carve-out, exit 2 when a tool is
+  missing). Nothing in this repository would notice a change to them.
+. **The consumer moves.** kyq pins a commit of this repository and inherits its
+  CLI contract, but its validator is still a stub that returns success for every
+  input. A version number would let that pass.
+
+== The pin
+
+`.ci/pins.sh` holds `STANDARDS_REV`, a full 40-hex commit. `.ci/standards.sha256`
+records the sha256 of every input that revision contributes, in `sha256sum -c`
+format, sorted. Both are bytes in review; neither is resolved from a branch.
+
+`scripts/standards/fetch.sh` materialises *that commit* — from
+`codeload.github.com` by default, from a cache or a local tree when asked — and
+verifies every recorded hash. A missing file, a changed byte, a manifest line it
+cannot parse, or a manifest path that escapes the tree is exit 3, never a pass.
+The archive host is overridable (`STANDARDS_URL_BASE`) so the whole path can be
+tested without the network.
+
+=== The normative dependencies, not just the files
+
+`.ci/standards-contract.tsv` records what this implementation actually depends
+on, one literal per line:
+
+[source,text]
+----
+role<TAB>path<TAB>literal
+rule-j-1	3-practice/JSON-POLICY.adoc	Rule J-1: JSON is I-JSON, serialised by JCS
+rule-j-1	3-practice/JSON-POLICY.adoc	followed by exactly one line feed
+rule-j-2	3-practice/JSON-POLICY.adoc	Rule J-2: JSON Lines is one canonical record per line
+gate	scripts/check-ijson-jcs.sh	--enforce
+gate-test	scripts/tests/check-ijson-jcs-test.sh	a missing ijson-jcs binary exits 2
+…
+----
+
+`scripts/standards/contract.sh` asserts every one of them. A revision that no
+longer contains a sentence is reported as `INCOMPATIBLE POLICY CHANGE`, with the
+file, the role and the sentence, and the proposal stops at exit 3 for a human
+ruling. That is the difference between "the file changed" and "the rule changed".
+
+== Detection
+
+`scripts/standards/detect.sh` asks the remote for `refs/heads/main` and compares
+it with the pin, printing `pin=`, `head=` and `drift=`. Exit 0 means no drift,
+1 means drift, 2 means it could not look (no git, unreachable remote, an answer
+that is not a commit). There is no code path that reports "no drift" because it
+failed to ask.
+
+Nothing in the runtime path consults the remote. Drift is a proposal, and a
+proposal is a pull request.
+
+== The proposal
+
+`scripts/standards/propose.sh` turns a candidate revision into a reviewable
+change and nothing else:
+
+. refuses anything that is not a full 40-hex commit;
+. records the manifest the candidate would pin, from the union of what is pinned
+  today and what the contract needs — a proposal may add an input, never quietly
+  drop one (a missing pinned input is exit 3);
+. runs `contract.sh` against the candidate (exit 3 if the policy moved);
+. reports every recorded hash that changes (`CHANGED`/`ADDED`);
+. with `--dry-run`, writes nothing.
+
+`.github/workflows/standards-update.yml` runs daily and on demand:
+
+detect → `propose.sh` → `verify.sh --rev <candidate> --receipt .ci/receipts/…`
+→ `publish-proposal.sh` (branch `standards/proposal-<12 hex>`, one pull request,
+updated in place on a rerun).
+
+`publish-proposal.sh` refuses to publish unless the staged changes are confined
+to `.ci/` and the receipt for the candidate says `"verdict":"accepted"`. The
+pull request body names the credential used and whether the commit was signed.
+
+== Verification
+
+`scripts/standards/verify.sh` is the gate. For one revision it runs, in order:
+
+. the pinned inputs hash to the manifest;
+. the contract's assertions hold;
+. `cargo build --release --locked` and `cargo test --locked --all-features`;
+. the **pinned** `scripts/tests/check-ijson-jcs-test.sh`, with the candidate
+  binary supplied through `IJSON_JCS`, and its own `passed N, failed 0`
+  summary checked rather than trusted (`N` must be positive);
+. the **pinned** `scripts/check-ijson-jcs.sh --enforce` over a known-canonical
+  tree (exit 0), and the three controls that make it a gate: a planted
+  non-canonical tree (exit 1), a missing tool (exit 2) and a missing path
+  (exit 2);
+. this repository's own machine-readable JSON under `.ci/` and `interop/`;
+. the profile matrix, JSON Lines framing and JSON-LD document scope, through the
+  candidate binary;
+. the kyq differential vectors, when present;
+. the receipt itself, which the candidate binary must accept as an estate file.
+
+A missing tool, a missing fixture or a failed test fails the run. No step is
+skipped, and no step passes because it printed nothing.
+
+`scripts/tests/standards-inputs-test.sh` proves the pipeline's own failure
+modes without a toolchain or the network: 61 controls, including the clean
+control that a matching tree passes, so a checker that returns 0 for everything
+cannot pass the test. `.github/workflows/ci.yml` runs it before `verify.sh`, and
+`tests/pipeline.rs` runs it from `cargo test`.
+
+== Receipts and the revision log
+
+`verify.sh --receipt FILE` writes a canonical JSON receipt — standards revision,
+manifest and contract digests, toolchain, binary digest, every check by name,
+`"verdict":"accepted"` — and only writes it when everything passed. See
+`.ci/receipts/README.adoc`.
+
+`.ci/standards-revisions.tsv` is append-only: date, revision, previous revision,
+manifest digest, source commit. `tests/standards_pin.rs` checks the header, the
+field types and that the newest record is the pinned revision.
+
+== Bytes are not files
+
+The pipeline leans on a distinction the library now makes explicit:
+
+[cols="2,3,3",options="header"]
+|===
+| Profile | Bytes | Used for
+
+| library | `to_jcs(value)` | hashing, signing, the wire, `canon`
+| estate file | `to_jcs(value)` + exactly one `\n` | files on disk (J-1), `fix`
+| tolerant | either | the historical `check`, which consumers rely on
+|===
+
+`ijson-jcs check --profile estate-file FILE` is the on-disk rule in one process;
+the pinned gate currently re-implements it with `tail -c 1`, which is why plain
+`check` exiting 0 was never the whole policy. `--profile library` is the hash
+form. The default is unchanged, so the standards gate and kyq's pinned CLI
+contract keep working.
+
+JSON Lines is held to the same verdicts in `check-jsonl`/`fix-jsonl`: one
+canonical record per line, no blank lines, exactly one final line feed; a
+missing final line feed is *not canonical*, a blank line is *invalid*. JSON-LD
+is canonicalised as a *document* by `jsonld`, with contexts left inert:
+`supports_rdf_dataset_canonicalization()` returns `false`, and nothing here is
+called RDF canonicalisation.
+
+== kyq
+
+`interop/kyq/` is the drop kyq consumes: `CONTRACT.adoc` (what kyq inherits and
+what it must not infer), 24 differential vectors with their exact bytes and exit
+codes, and `vectors.sha256` sealing them. `scripts/standards/kyq-vectors.sh
+verify` replays them against a binary and `write` re-records them; a vector
+cannot be re-baselined without the manifest changing in review.
+
+`.github/workflows/kyq-sync.yml` verifies the vectors, and on demand copies the
+drop into kyq as `interop/ijson-jcs/` on a branch and opens one pull request
+through `publish-kyq-drop.sh`. It fails rather than skipping when
+`KYQ_SYNC_TOKEN` is not provisioned — and that is not defensive wording: the
+drop was rehearsed here and the push was refused with `Permission to
+metadatastician/kyq.git denied to hyperpolymath`, even though the API reports
+push access on the repository. A credential that may write to kyq has to be
+provisioned deliberately; a read/no-write token being present is not it.
+
+Verifying the vectors is one input to kyq's readiness. kyq's stub validator
+(`is_valid_i_json_string` returning `true`), a `yq` alias, or a green YAML parse
+are none of them evidence that kyq is a gate.
+
+== Rehearsal (2026-11-01)
+
+The whole path was run once against a real candidate — upstream head
+`22e060bb239875c1180f08ca9fd9cc361b9ebc41` — triggered by a push, because
+`workflow_dispatch` is registered only from the default branch:
+
+* **detect**: `drift=true`, `head=22e060bb…`.
+* **propose**: pin, manifest and one revision record written; the two changed
+  files are both under `1-formats/deed/` and change nothing this crate depends
+  on; the previous revision in the log is `8e48b1ca…`.
+* **verify**: 15 checks pass at the *candidate* revision — including the pinned
+  gate test taken from that revision — and the receipt says
+  `"verdict":"accepted"`, `"label":"standards-update"`,
+  `"standards.revision":"22e060bb…"`.
+* **publish**: the branch `standards/proposal-22e060bb2398` was pushed with that
+  receipt, and then the step stopped with the error the script now reports
+  verbatim:
++
+[source,text]
+----
+pull request create failed: GraphQL: GitHub Actions is not permitted to create
+or approve pull requests (createPullRequest)
+----
+
+That is the estate mechanism, not the pipeline: the workflow token may push a
+branch but may not open a pull request. One of two owner actions fixes it —
+enable *Allow GitHub Actions to create and approve pull requests* in the
+repository settings, or provision `STANDARDS_UPDATE_TOKEN`. Until then the
+proposal is prepared, verified and pushed, and the run fails loudly rather than
+claiming it published. The rehearsal branch was deleted afterwards so the first
+real proposal starts from `main`.
+
+== Status
+
+[cols="1,1,4",options="header"]
+|===
+| Acceptance item | State | Evidence
+
+| 1. Immutable revision, exact normative dependencies, change detection, reviewable proposal
+| done
+| `.ci/pins.sh`, `.ci/standards.sha256`, `.ci/standards-contract.tsv`,
+  `fetch.sh`, `contract.sh`, `detect.sh`, `propose.sh`,
+  `.github/workflows/standards-update.yml`; `standards-inputs-test.sh` covers
+  drift/no-drift/unparseable/missing-git and dry-run silence.
+
+| 2. Library + CLI suite and the pinned standards scripts against the candidate; missing tools/fixtures fail
+| done in code, proven by CI
+| `verify.sh` steps 3–7, including the negative controls for the gate and the
+  "exited 0 but printed no summary" check. The receipt is the record.
+
+| 3. Library bytes vs the estate file profile; JSONL framing; JSON-LD document bytes without an RDF claim
+| done
+| `src/profile.rs`, `src/records.rs`, `src/jsonld.rs`, `check --profile`,
+  `check-jsonl`/`fix-jsonl`, `jsonld`; `tests/profile.rs`,
+  `tests/records.rs`, `tests/jsonld.rs`.
+
+| 4. Negative tests for stale/missing inputs, incompatible policy, invalid JSON, malformed framing; revisions and receipts recorded
+| done
+| `scripts/tests/standards-inputs-test.sh` (61 controls), `tests/pipeline.rs`,
+  `tests/standards_pin.rs`, `.ci/standards-revisions.tsv`,
+  `.ci/receipts/README.adoc`.
+
+| 5. kyq's pinned contract and differential vectors through the same process
+| ready to propose; not yet proposed in kyq
+| `interop/kyq/`, `kyq-vectors.sh` (24 vectors, verified against the CI binary),
+  `.github/workflows/kyq-sync.yml`, `publish-kyq-drop.sh` (dry run prints the
+  branch, revision and vectors digest). The push to kyq needs `KYQ_SYNC_TOKEN`
+  that may write there; the current credential is refused.
+
+| 6. CI, signed publication, consumer compatibility, a real proposal end to end
+| CI green; proposal rehearsed to the pull-request step; signing and the PR
+  credential need the estate
+| `.github/workflows/ci.yml` (Standards pipeline job, run 41363494161),
+  `.github/workflows/standards-update.yml` (rehearsal run 41363960949). Commit
+  signing is used when `STANDARDS_SIGNING_KEY`/`STANDARDS_SIGNING_KEY_ID` are
+  provisioned; the pull request says `commit signed: no` when they are not. The
+  dated revision log and the retained receipts keep accepted bytes.
+|===
+
+=== Owner actions this cannot perform
+
+* Provision `STANDARDS_SIGNING_KEY` and `STANDARDS_SIGNING_KEY_ID` (estate
+  signing mechanism) so proposals are attested commits.
+* Provision `KYQ_SYNC_TOKEN` (or the estate app token) so the kyq drop can be
+  proposed.
+* Rule on any proposal that fails the contract: an `INCOMPATIBLE POLICY CHANGE`
+  is exit 3 by design, and only the owner can decide whether the tests or the
+  policy is what should move.
+
+== What this does not claim
+
+* The pin is not `main`. It moves when a proposal is merged, and the receipt
+  says what was proven at that revision.
+* A green run here is not kyq readiness, not estate-wide JSON conformance, and
+  not a claim that every `.json` in standards is canonical. It is this
+  implementation matching one immutable revision of the policy that governs it.
+* `.ci/standards.sha256` covers the inputs this repository reads. It is not a
+  hash of the whole standards repository.

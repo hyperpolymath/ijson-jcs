@@ -112,10 +112,12 @@ fn standards_pipeline_can_fail() {
         .and_then(|count| count.trim().parse().ok())
         .unwrap_or(0);
     assert!(passed >= 40, "only {passed} controls ran");
-    assert!(
-        stdout.contains("a proposal with no staged change is refused"),
-        "the Git fixture controls did not run"
-    );
+    if Command::new("git").arg("--version").output().is_ok() {
+        assert!(
+            stdout.contains("a proposal with no staged change is refused"),
+            "the Git fixture controls did not run"
+        );
+    }
     assert!(!marker.exists(), "a host-supplied hook executed");
     assert_eq!(
         std::fs::read_to_string(host_git.join("HEAD")).unwrap(),

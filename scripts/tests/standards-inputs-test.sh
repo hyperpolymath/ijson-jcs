@@ -25,6 +25,12 @@
 # EXIT  0 every control behaved; 1 a control did not; 2 the test could not run.
 set -euo pipefail
 
+# Synthetic repositories must not invoke a developer's signing agent, hooks or
+# credential helpers. This subprocess only creates disposable fixture commits;
+# the production publisher's signing requirements are unchanged.
+export GIT_CONFIG_GLOBAL=/dev/null
+export GIT_CONFIG_NOSYSTEM=1
+
 repo_root="$(cd -- "${0%/*}/../.." && pwd)"
 scripts="$repo_root/scripts/standards"
 contract="$repo_root/.ci/standards-contract.tsv"

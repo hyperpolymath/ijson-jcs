@@ -430,6 +430,11 @@ cargo test test_duplicate_keys
 cargo test --doc
 ```
 
+For Bash/WSL testing on Windows, fresh clones use LF for shell scripts. An
+existing checkout can retain CRLF in unchanged scripts after pulling this
+attribute change. Preserve your local changes and make a fresh clone before
+testing; do not reset or overwrite a working checkout to refresh line endings.
+
 Standards pipeline, by hand:
 
 ```bash

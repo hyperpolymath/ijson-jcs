@@ -21,9 +21,57 @@ fn root() -> &'static str {
 /// thing that actually runs in CI.
 #[test]
 fn standards_pipeline_can_fail() {
+    // Exercise the real script with hostile host settings, rather than relying
+    // on a CI runner whose Git configuration happens to be empty.
+    let sandbox = std::env::temp_dir().join(format!(
+        "ijson-pipeline-host-{}-{}",
+        std::process::id(),
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos()
+    ));
+    std::fs::create_dir(&sandbox).unwrap();
+    struct Cleanup(std::path::PathBuf);
+    impl Drop for Cleanup {
+        fn drop(&mut self) {
+            let _ = std::fs::remove_dir_all(&self.0);
+        }
+    }
+    let _cleanup = Cleanup(sandbox.clone());
+    let home = sandbox.join("home");
+    let xdg = sandbox.join("xdg");
+    let template = sandbox.join("template");
+    let hooks = template.join("hooks");
+    std::fs::create_dir_all(&home).unwrap();
+    std::fs::create_dir_all(xdg.join("git")).unwrap();
+    std::fs::create_dir_all(&hooks).unwrap();
+    let config = "[commit]\n\tgpgsign = true\n[gpg]\n\tprogram = /bin/false\n";
+    for path in [
+        home.join(".gitconfig"),
+        xdg.join("git/config"),
+        sandbox.join("system"),
+    ] {
+        std::fs::write(path, config).unwrap();
+    }
+    let marker = sandbox.join("hook-ran");
+    let hook = hooks.join("pre-commit");
+    std::fs::write(&hook, "#!/bin/sh\n: >\"$IJSON_HOST_HOOK_MARKER\"\nexit 1\n").unwrap();
+    use std::os::unix::fs::PermissionsExt;
+    std::fs::set_permissions(&hook, std::fs::Permissions::from_mode(0o755)).unwrap();
     let script = format!("{}/scripts/tests/standards-inputs-test.sh", root());
     let output = Command::new("bash")
         .arg(&script)
+        .env("HOME", &home)
+        .env("XDG_CONFIG_HOME", &xdg)
+        .env("GIT_CONFIG_GLOBAL", home.join(".gitconfig"))
+        .env("GIT_CONFIG_SYSTEM", sandbox.join("system"))
+        .env("GIT_CONFIG_NOSYSTEM", "0")
+        .env("GIT_TEMPLATE_DIR", &template)
+        .env("GIT_CONFIG_COUNT", "1")
+        .env("GIT_CONFIG_KEY_0", "core.hooksPath")
+        .env("GIT_CONFIG_VALUE_0", &hooks)
+        .env("IJSON_HOST_HOOK_MARKER", &marker)
         .output()
         .unwrap_or_else(|e| panic!("cannot run {script}: {e}"));
     let stdout = String::from_utf8_lossy(&output.stdout);
@@ -48,6 +96,11 @@ fn standards_pipeline_can_fail() {
         .and_then(|count| count.trim().parse().ok())
         .unwrap_or(0);
     assert!(passed >= 40, "only {passed} controls ran");
+    assert!(
+        stdout.contains("a proposal with no staged change is refused"),
+        "the Git fixture controls did not run"
+    );
+    assert!(!marker.exists(), "a host-supplied hook executed");
 }
 
 /// The profile, JSONL and JSON-LD fixture trees the pipeline gates are here.

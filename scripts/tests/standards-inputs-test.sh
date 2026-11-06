@@ -30,12 +30,19 @@ set -euo pipefail
 # the production publisher's signing requirements are unchanged.
 export GIT_CONFIG_GLOBAL=/dev/null
 export GIT_CONFIG_NOSYSTEM=1
+unset GIT_CONFIG GIT_CONFIG_PARAMETERS GIT_CONFIG_COUNT
 
 repo_root="$(cd -- "${0%/*}/../.." && pwd)"
 scripts="$repo_root/scripts/standards"
 contract="$repo_root/.ci/standards-contract.tsv"
 work="$(mktemp -d)"
 trap 'rm -rf -- "$work"' EXIT
+
+# Older Git versions do not recognise GIT_CONFIG_GLOBAL. Give them empty
+# traditional config locations too, and never copy caller-provided init hooks.
+mkdir -p "$work/home" "$work/xdg" "$work/git-template"
+export HOME="$work/home" XDG_CONFIG_HOME="$work/xdg"
+export GIT_TEMPLATE_DIR="$work/git-template"
 
 pass=0
 fail=0

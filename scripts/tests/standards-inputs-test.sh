@@ -31,6 +31,10 @@ set -euo pipefail
 export GIT_CONFIG_GLOBAL=/dev/null
 export GIT_CONFIG_NOSYSTEM=1
 unset GIT_CONFIG GIT_CONFIG_PARAMETERS GIT_CONFIG_COUNT
+# A caller may also export repository locations (for example from a Git hook).
+# Fixture commits must never use the caller's repository, index or object store.
+unset GIT_DIR GIT_COMMON_DIR GIT_WORK_TREE GIT_INDEX_FILE
+unset GIT_OBJECT_DIRECTORY GIT_ALTERNATE_OBJECT_DIRECTORIES GIT_NAMESPACE
 
 repo_root="$(cd -- "${0%/*}/../.." && pwd)"
 scripts="$repo_root/scripts/standards"

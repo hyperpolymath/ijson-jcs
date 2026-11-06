@@ -55,6 +55,12 @@ fn standards_pipeline_can_fail() {
         std::fs::write(path, config).unwrap();
     }
     let marker = sandbox.join("hook-ran");
+    let host_git = sandbox.join("host-git");
+    let host_worktree = sandbox.join("host-worktree");
+    std::fs::create_dir(&host_git).unwrap();
+    std::fs::create_dir(&host_worktree).unwrap();
+    std::fs::write(host_git.join("HEAD"), "host HEAD must remain untouched\n").unwrap();
+    std::fs::write(host_git.join("index"), "host index must remain untouched\n").unwrap();
     let hook = hooks.join("pre-commit");
     std::fs::write(&hook, "#!/bin/sh\n: >\"$IJSON_HOST_HOOK_MARKER\"\nexit 1\n").unwrap();
     use std::os::unix::fs::PermissionsExt;
@@ -72,6 +78,10 @@ fn standards_pipeline_can_fail() {
         .env("GIT_CONFIG_KEY_0", "core.hooksPath")
         .env("GIT_CONFIG_VALUE_0", &hooks)
         .env("IJSON_HOST_HOOK_MARKER", &marker)
+        .env("GIT_DIR", &host_git)
+        .env("GIT_COMMON_DIR", &host_git)
+        .env("GIT_WORK_TREE", &host_worktree)
+        .env("GIT_INDEX_FILE", host_git.join("index"))
         .output()
         .unwrap_or_else(|e| panic!("cannot run {script}: {e}"));
     let stdout = String::from_utf8_lossy(&output.stdout);
@@ -101,6 +111,14 @@ fn standards_pipeline_can_fail() {
         "the Git fixture controls did not run"
     );
     assert!(!marker.exists(), "a host-supplied hook executed");
+    assert_eq!(
+        std::fs::read_to_string(host_git.join("HEAD")).unwrap(),
+        "host HEAD must remain untouched\n"
+    );
+    assert_eq!(
+        std::fs::read_to_string(host_git.join("index")).unwrap(),
+        "host index must remain untouched\n"
+    );
 }
 
 /// The profile, JSONL and JSON-LD fixture trees the pipeline gates are here.

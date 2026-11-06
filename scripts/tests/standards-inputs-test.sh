@@ -28,13 +28,15 @@ set -euo pipefail
 # Synthetic repositories must not invoke a developer's signing agent, hooks or
 # credential helpers. This subprocess only creates disposable fixture commits;
 # the production publisher's signing requirements are unchanged.
+# Clear the complete Git namespace, including repository locations, injected
+# config, author/committer identities and dates. New Git variables must not
+# silently reintroduce dependence on the developer's environment.
+for git_env_name in "${!GIT_@}"; do
+  unset "$git_env_name"
+done
 export GIT_CONFIG_GLOBAL=/dev/null
 export GIT_CONFIG_NOSYSTEM=1
-unset GIT_CONFIG GIT_CONFIG_PARAMETERS GIT_CONFIG_COUNT
-# A caller may also export repository locations (for example from a Git hook).
-# Fixture commits must never use the caller's repository, index or object store.
-unset GIT_DIR GIT_COMMON_DIR GIT_WORK_TREE GIT_INDEX_FILE
-unset GIT_OBJECT_DIRECTORY GIT_ALTERNATE_OBJECT_DIRECTORIES GIT_NAMESPACE
+export GIT_TERMINAL_PROMPT=0
 
 repo_root="$(cd -- "${0%/*}/../.." && pwd)"
 scripts="$repo_root/scripts/standards"

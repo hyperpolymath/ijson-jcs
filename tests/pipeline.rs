@@ -82,6 +82,12 @@ fn standards_pipeline_can_fail() {
         .env("GIT_COMMON_DIR", &host_git)
         .env("GIT_WORK_TREE", &host_worktree)
         .env("GIT_INDEX_FILE", host_git.join("index"))
+        .env("GIT_AUTHOR_NAME", "")
+        .env("GIT_AUTHOR_EMAIL", "")
+        .env("GIT_AUTHOR_DATE", "not-a-valid-git-date")
+        .env("GIT_COMMITTER_NAME", "")
+        .env("GIT_COMMITTER_EMAIL", "")
+        .env("GIT_COMMITTER_DATE", "not-a-valid-git-date")
         .output()
         .unwrap_or_else(|e| panic!("cannot run {script}: {e}"));
     let stdout = String::from_utf8_lossy(&output.stdout);

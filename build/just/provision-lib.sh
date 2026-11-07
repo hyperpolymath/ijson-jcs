@@ -502,6 +502,7 @@ tool_table() {
 system_deps() { # $1 adoc|ai
   local l d seen="" fed deb mac why any=0
   [ "$1" = adoc ] && printf '=== System packages\n'
+  printf '\nGNU coreutils is required for bounded commands: `timeout` on Linux/Windows Git Bash, or `gtimeout` from `brew install coreutils` on macOS. The Guix shell includes coreutils.\n'
   for l in "${LANGS[@]}"; do
     d=$(lang_sysdeps "$l"); [ -z "$d" ] && continue
     case "$seen" in *"|$d|"*) continue ;; esac; seen="$seen|$d|"; any=1
@@ -516,8 +517,8 @@ system_deps() { # $1 adoc|ai
   done
   if [ "$1" = adoc ]; then
     if [ $any -eq 1 ]; then printf '\nThe Guix development shell (`%s`) provides these itself, so inside `just dev-shell` none of them is needed.\n' "$(gpath manifest.scm)"
-    else printf '\nNone beyond git and a shell: every tool this repository needs comes from mise, or from the Guix shell.\n'; fi
-  elif [ $any -eq 0 ]; then printf '* No other OS packages: every tool comes from mise.\n'; fi
+    else printf '\nNo additional language-specific OS packages: language tools come from mise or the Guix shell.\n'; fi
+  elif [ $any -eq 0 ]; then printf '* No additional language-specific OS packages.\n'; fi
 }
 
 # Diagnose the provisioning set and toolchain, then the repository's own
@@ -529,6 +530,10 @@ cmd_doctor() {
   printf '%s doctor — %s (%s; languages: %s)\n' "$REPO_NAME" "$REPO_SLUG" "$ARCHETYPE" "${LANGS[*]}"
 
   hdr "Core toolchain"
+  if ! have timeout && ! have gtimeout; then
+    fail "PV-E42 GNU coreutils is required for bounded diagnostics (macOS: brew install coreutils)"
+    return 1
+  fi
   have git && pass "git $($T git --version 2>/dev/null | awk '{print $3}')" || fail "PV-E01 git not found — install git from your OS package manager"
   if have just; then
     local jv; jv=$($T just --version 2>/dev/null | awk '{print $2}')
@@ -647,6 +652,10 @@ cmd_doctor() {
 # launcher executable. Installation and hook failures do not skip verification.
 cmd_setup() {
   printf '%s setup — installing everything this repository needs\n' "$REPO_NAME"
+  if ! have timeout && ! have gtimeout; then
+    fail "PV-E42 GNU coreutils is required before setup (macOS: brew install coreutils)"
+    return 1
+  fi
   local rc=0
   if have mise; then
     hdr "mise toolchain"

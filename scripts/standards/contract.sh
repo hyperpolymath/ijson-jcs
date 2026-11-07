@@ -77,14 +77,10 @@ fi
 
 assertions=0
 failures=0
-files=0
-declare -A seen=()
+# Count distinct paths without associative arrays: macOS ships Bash 3.2.
+files="$(ijson_contract_paths "$contract" | awk 'END { print NR }')"
 while IFS=$'\t' read -r role path literal; do
   assertions=$((assertions + 1))
-  if [ -z "${seen[$path]:-}" ]; then
-    seen[$path]=1
-    files=$((files + 1))
-  fi
   if [ ! -f "$tree/$path" ]; then
     printf 'MISSING %s (%s): the revision does not carry this file\n' "$path" "$role" >&2
     failures=$((failures + 1))

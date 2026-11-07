@@ -31,3 +31,5 @@ jobs:
       - run: cargo test --locked --all-targets
       - run: cargo test --locked --doc
       - run: bash launcher.sh --help
+      - run: bash build/just/provision-lib.sh langs
+      - run: bash scripts/tests/provisioning-crates-test.sh "$PWD/build/just/provision-lib.sh"

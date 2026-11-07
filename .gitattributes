@@ -1,3 +1,6 @@
 # SPDX-License-Identifier: MPL-2.0
 # Bash integration tests also run from Windows checkouts through WSL.
 *.sh text eol=lf
+# Canonical receipts and sealed vectors are byte protocols, not host text.
+.ci/receipts/*.json -text
+interop/kyq/vectors/** -text

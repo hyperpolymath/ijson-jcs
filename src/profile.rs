@@ -60,8 +60,8 @@ pub const FINAL_LF: u8 = b'\n';
 
 /// Which canonical form a caller is asking about.
 ///
-/// See the [module documentation](self) for the difference between the
-/// library bytes and the estate file profile.
+/// Library bytes omit a final line feed; the estate file profile appends one.
+/// See [`Self::LibraryBytes`] and [`Self::EstateFile`] for the exact contracts.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
 pub enum CanonicalProfile {
     /// `to_jcs(value)` exactly: no trailing line feed. This is what you hash

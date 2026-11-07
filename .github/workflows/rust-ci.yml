@@ -1,0 +1,16 @@
+# SPDX-License-Identifier: MPL-2.0
+# Cross-repository reusable: deliberately not onboarded in actions.lock.
+name: Rust CI
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: rust-ci-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  rust-ci:
+    uses: hyperpolymath/proven-cicd/.github/workflows/rust-ci.yml@9ae968e3a7fc621d4ee89b0715d8a1e5da0a4308

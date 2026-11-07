@@ -29,7 +29,7 @@ Windows, Linux and macOS execution must each have their own receipt.
 guix time-machine -C channels.scm -- shell -m manifest.scm supplies the
 declared development environment. The Rust package uses the canonical cargo
 template and loads build/guix/crates.scm, generated from Cargo.lock by
-ash build/just/provision-lib.sh crates-scm.
+bash build/just/provision-lib.sh crates-scm.
 Compiled Guix packaging is not qualified until all registry and pinned git
 dependencies and a sufficiently new Rust compiler build offline.
 The inspected local Guix provides Rust 1.93; the native toolchain is 1.99.1.

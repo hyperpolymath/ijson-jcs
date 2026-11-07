@@ -1,0 +1,15 @@
+;; SPDX-License-Identifier: MPL-2.0
+(praxis-deed
+  :schema-version "1.0.0"
+  :canonical-name "ijson-jcs-provisioning"
+  :name "ijson-jcs"
+  :repo "hyperpolymath/ijson-jcs"
+  :version "0.1.0"
+  :archetype "tool"
+  :languages "rust"
+  :build "cargo build --locked"
+  :test "cargo test --locked --all-targets"
+  :bench "cargo bench --locked"
+  :lint "cargo clippy --locked --all-targets -- -D warnings"
+  :run "cargo run --locked --bin ijson-jcs -- --help"
+  :ai-say-it "Set up ijson-jcs from https://github.com/hyperpolymath/ijson-jcs; follow docs/AI_INSTALLATION_GUIDE.adoc and report actual checks and unresolved requirements.")

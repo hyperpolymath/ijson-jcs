@@ -347,7 +347,7 @@ fn kyq_vectors_are_complete_and_sealed() {
             .strip_prefix(&drop)
             .expect("vector file under interop/kyq")
             .to_string_lossy()
-            .to_string();
+            .replace('\\', "/");
         assert!(
             sealed.contains(relative.as_str()),
             "vector file is not sealed by vectors.sha256: {relative}"

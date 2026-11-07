@@ -118,7 +118,11 @@ detect_langs() {
   [ ${#out[@]} -eq 0 ] && out+=(docs)
   printf '%s\n' "${out[@]}"
 }
-mapfile -t LANGS < <(detect_langs)
+# Bash 3.2 is still the system shell on macOS; do not require mapfile (Bash 4).
+LANGS=()
+while IFS= read -r detected_lang; do
+  LANGS+=("$detected_lang")
+done < <(detect_langs)
 [ -z "$ARCHETYPE" ] && { [ "${LANGS[*]}" = docs ] && ARCHETYPE=docs || ARCHETYPE=library; }
 
 # Binaries each language needs, and how each is obtained.

@@ -13,4 +13,4 @@ concurrency:
   cancel-in-progress: true
 jobs:
   rust-ci:
-    uses: hyperpolymath/proven-cicd/.github/workflows/rust-ci.yml@9ae968e3a7fc621d4ee89b0715d8a1e5da0a4308
+    uses: hyperpolymath/proven-cicd/.github/workflows/rust-ci.yml@f98f9b975de43c3fcb36188843ee351a415fe057

@@ -31,7 +31,7 @@ DEED=".machine_readable/descriptiles/provisioning_praxis.deed"
 MIN_JUST="1.42.0"   # root→module recipe deps (`doctor: provision::doctor`); 1.41 rejects them
 # How to get mise: package managers first; the installer only as download, read, run.
 MISE_INSTALL_HINT="brew install mise | Fedora: dnf copr enable jdxcode/mise, dnf install mise | winget install jdx.mise | others: https://mise.jdx.dev/installing-mise.html — or: curl -fsSLo mise-install.sh https://mise.run, read it, sh mise-install.sh"
-T="timeout 15"      # some --version probes hang (observed 2026-09-30); never probe unbounded
+T="provision_timeout 15" # Never probe unbounded; macOS coreutils uses gtimeout.
 
 if [ -t 1 ]; then R=$'\033[31m'; G=$'\033[32m'; Y=$'\033[33m'; B=$'\033[34m'; Z=$'\033[0m'; else R=; G=; Y=; B=; Z=; fi
 PASS=0; WARN=0; FAIL=0
@@ -47,6 +47,17 @@ info() { printf '  %sinfo%s  %s\n' "$B" "$Z" "$*"; }
 hdr()  { printf '\n%s== %s ==%s\n' "$B" "$*" "$Z"; }
 # Return success when command $1 is available in the current shell.
 have() { command -v "$1" >/dev/null 2>&1; }
+
+# Homebrew installs GNU timeout under its g-prefixed name on macOS.
+# Missing time-bound support must never silently turn a bounded operation unbounded.
+provision_timeout() {
+  if have timeout; then command timeout "$@"
+  elif have gtimeout; then command gtimeout "$@"
+  else
+    printf '%s\n' 'PV-E42 timeout/gtimeout is required (macOS: brew install coreutils).' >&2
+    return 127
+  fi
+}
 
 # Where this repository keeps each part of the set. A file sits at the root only
 # when something needs it there (launcher.sh, Justfile, mise.toml, mise.lock);
@@ -785,7 +796,7 @@ cmd_crates_scm() {
   if [ "$want" -gt 0 ]; then
     # GUIX is split on purpose: it may be a command with arguments.
     # shellcheck disable=SC2086
-    timeout 1800 $GUIX import crate --lockfile="$tmp/Cargo.lock" "$REPO_NAME" >"$tmp/sources" 2>"$tmp/errors" || status=$?
+    provision_timeout 1800 $GUIX import crate --lockfile="$tmp/Cargo.lock" "$REPO_NAME" >"$tmp/sources" 2>"$tmp/errors" || status=$?
     got=$(awk '/^\(define rust-/ { n++ } END { print n+0 }' "$tmp/sources")
     unique=$(awk '/^\(define rust-/ { seen[$2]=1 } END { for (key in seen) n++; print n+0 }' "$tmp/sources")
     if [ "$status" -ne 0 ] || [ "$got" != "$want" ] || [ "$unique" != "$want" ]; then
@@ -839,7 +850,7 @@ clip() { # best-effort; silent when no clipboard exists (CI, SSH)
   elif [ -n "${WAYLAND_DISPLAY:-}" ] && have wl-copy; then c=(wl-copy)
   elif [ -n "${DISPLAY:-}" ] && have xclip; then c=(xclip -selection clipboard)
   else cat >/dev/null; return 1; fi
-  timeout 3 "${c[@]}" >/dev/null 2>&1
+  provision_timeout 3 "${c[@]}" >/dev/null 2>&1
 }
 # Print AI-assisted setup instructions and attempt to copy the setup sentence.
 # Clipboard failure is ignored.

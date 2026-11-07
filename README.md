@@ -368,8 +368,8 @@ JCS requires that object keys be sorted by UTF-16 code unit order, not simple st
 
 ## Compatibility
 
-- **Rust Version**: 1.70+ (uses 2024 edition)
-- **Dependencies**: serde, serde_json, thiserror
+- **Rust Version**: 1.85+ (2024 edition); development checks use the 1.99.1 toolchain pinned in `rust-toolchain.toml`.
+- **Dependencies**: serde, serde_json, thiserror, ryu-js
 - **No Unsafe**: 100% safe Rust
 - **Cross-Platform**: Pure Rust, works on all platforms
 
@@ -429,6 +429,11 @@ cargo tarpaulin
 cargo test test_duplicate_keys
 cargo test --doc
 ```
+
+For Bash/WSL testing on Windows, fresh clones use LF for shell scripts. An
+existing checkout can retain CRLF in unchanged scripts after pulling this
+attribute change. Preserve your local changes and make a fresh clone before
+testing; do not reset or overwrite a working checkout to refresh line endings.
 
 Standards pipeline, by hand:
 

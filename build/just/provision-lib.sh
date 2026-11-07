@@ -770,42 +770,46 @@ cmd_toolchain_refresh() {
 # with this directory mounted.
 GUIX="${GUIX:-guix}"
 
-# Write build/guix/crates.scm: every registry crate in Cargo.lock as a Guix
-# origin, and %crate-inputs listing them for guix.scm. Written whole or not at
-# all. Accept importer output when its rust- definition count matches the number
-# of registry packages in Cargo.lock; the importer's exit status is not checked.
+# Write all registry and Git inputs from Cargo.lock, including their checksums.
+# Normalize CRLF in a temporary input: Guix's lockfile parser expects LF.
+# Require importer success and the expected number of unique source bindings.
 # GUIX may contain a command and arguments; import is limited to 1,800 seconds.
-# Missing Cargo.lock is a successful no-op. Return 1 for temporary-file creation
-# failure or a count mismatch; later write errors are not reliably propagated.
+# Missing Cargo.lock is a successful no-op; failures leave the prior file intact.
 cmd_crates_scm() {
-  local dst=build/guix/crates.scm want got tmp spdx
+  local dst=build/guix/crates.scm want got unique tmp spdx staged status=0
   [ -f Cargo.lock ] || { info "no Cargo.lock — no crate inputs"; return 0; }
-  want=$(grep -c '^source = "registry+' Cargo.lock)
-  tmp=$(mktemp) || return 1
+  tmp=$(mktemp -d) || return 1
+  sed $'s/\r$//' Cargo.lock >"$tmp/Cargo.lock" || { rm -rf -- "$tmp"; return 1; }
+  want=$(awk '/^source = / { n++ } END { print n+0 }' "$tmp/Cargo.lock")
+  : >"$tmp/sources"
   if [ "$want" -gt 0 ]; then
     # GUIX is split on purpose: it may be a command with arguments.
     # shellcheck disable=SC2086
-    timeout 1800 $GUIX import crate --lockfile=Cargo.lock "$REPO_NAME" >"$tmp" 2>"$tmp.err"
-    got=$(grep -c '^(define rust-' "$tmp")
-    if [ "$got" != "$want" ]; then
-      fail "PV-E41 guix import crate defined $got of the $want registry crates in Cargo.lock; $dst left as-is: $(grep -m1 -i 'error' "$tmp.err" || grep -v '^+' "$tmp.err" | tail -1)"
-      rm -f "$tmp" "$tmp.err"; return 1
+    timeout 1800 $GUIX import crate --lockfile="$tmp/Cargo.lock" "$REPO_NAME" >"$tmp/sources" 2>"$tmp/errors" || status=$?
+    got=$(awk '/^\(define rust-/ { n++ } END { print n+0 }' "$tmp/sources")
+    unique=$(awk '/^\(define rust-/ { seen[$2]=1 } END { for (key in seen) n++; print n+0 }' "$tmp/sources")
+    if [ "$status" -ne 0 ] || [ "$got" != "$want" ] || [ "$unique" != "$want" ]; then
+      fail "PV-E41 guix import crate exited $status and defined $unique unique inputs ($got definitions), expected $want; $dst left as-is: $(tail -1 "$tmp/errors")"
+      rm -rf -- "$tmp"; return 1
     fi
   fi
   # The licence line is guix.scm's own, so the file matches its repository.
-  spdx=$(grep -m1 'SPDX-License-Identifier' "$(gpath guix.scm)" 2>/dev/null)
-  mkdir -p build/guix
-  {
-    [ -n "$spdx" ] && printf '%s\n' "$spdx"
-    # shellcheck disable=SC2016  # the backticks are literal text
-    printf ';; Generated from Cargo.lock by `just toolchain-refresh` (guix import crate\n'
-    printf ';; --lockfile); never hand-edit it. guix.scm loads it for %%crate-inputs.\n\n'
-    grep -v '^guix (GNU Guix)' "$tmp"
-    printf '\n(define %%crate-inputs\n  (list'
-    grep -o '^(define rust-[^ ]*' "$tmp" | awk '{printf "\n    %s", $2}'
+  spdx=$(grep -m1 'SPDX-License-Identifier' "$(gpath guix.scm)" 2>/dev/null || true)
+  mkdir -p build/guix || { rm -rf -- "$tmp"; return 1; }
+  [ ! -d "$dst" ] || { fail "PV-E41 $dst is a directory"; rm -rf -- "$tmp"; return 1; }
+  staged=$(mktemp "$dst.XXXXXX") || { rm -rf -- "$tmp"; return 1; }
+  if ! {
+    { [ -z "$spdx" ] || printf '%s\n' "$spdx"; } &&
+    printf ';; Generated from Cargo.lock by just toolchain-refresh (guix import crate\n' &&
+    printf ';; --lockfile); never hand-edit it. guix.scm loads it for %%crate-inputs.\n\n' &&
+    awk '!/^guix \(GNU Guix\)/' "$tmp/sources" &&
+    printf '\n(define %%crate-inputs\n  (list' &&
+    awk '/^\(define rust-/ {printf "\n    %s", $2}' "$tmp/sources" &&
     printf '))\n'
-  } >"$dst.new" && mv "$dst.new" "$dst"
-  rm -f "$tmp" "$tmp.err"
+  } >"$staged" || ! mv -- "$staged" "$dst"; then
+    rm -f -- "$staged"; rm -rf -- "$tmp"; return 1
+  fi
+  rm -rf -- "$tmp"
   info "$dst: $want crate source(s)"
 }
 

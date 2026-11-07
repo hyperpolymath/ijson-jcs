@@ -13,6 +13,8 @@ Use ./launcher.sh --run --help from Bash or just run --help.
 Paths containing spaces are supported by the launcher.
 
 For managed development, install mise, review mise.toml, run mise trust,
+and install GNU coreutils (`brew install coreutils` on macOS) for bounded
+provisioning commands; its `gtimeout` name is supported. Then run
 mise install, and just doctor. just setup calls the shared standards
 provisioning engine. Diagnostics return failure for unmet requirements.
 No service, port, credentials or database is required for the portable CLI.

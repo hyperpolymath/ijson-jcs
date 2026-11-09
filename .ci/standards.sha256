@@ -1,5 +1,5 @@
 3e10eebef42194aeb63702072561e8f2662b4fd418a54586b4a7e80c4974e4c1  1-formats/deed/spec/abnf/deed.abnf
-aa0b61314aa54a7778665b848b408f6ef0fd4d6109a8ac0eb793086acd6c0eb8  1-formats/deed/tools/deed_lint.js
+10d95614125d17421816bad322a48a2702e9dd423c354f66b49b1fcdb36c26e7  1-formats/deed/tools/deed_lint.js
 6f0476b398ba870ac5fb7f66e29725992fc060084ba8804967bc2ae48db52027  1-formats/k9/spec/K9-CONTRACT-SPEC.adoc
 35e887762080acd2854849499662711a5d03038d1079ab5e194df40523136f97  1-formats/k9/spec/contract/k9_contract.ncl
 8a48e109e10b14b5dc99de3dcbc31857a583839237f5a1aeed0701e6538d50c4  1-formats/k9/tools/k9-validate.sh

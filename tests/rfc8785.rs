@@ -2,7 +2,7 @@
 //! RFC 8785 Appendix B: raw binary64 inputs, not rounded decimal literals.
 //! These are standards examples, not a claim of proof over all binary64 values.
 
-use ijson_jcs::{JsonMode, Value, parse_json, to_jcs_string};
+use ijson_jcs::{JsonMode, Value, parse_jcs, parse_json, to_jcs_string};
 
 #[test]
 fn appendix_b_binary64_vectors() {
@@ -39,6 +39,14 @@ fn appendix_b_binary64_vectors() {
             want,
             "{bits:016x}"
         );
+        let reparsed = parse_jcs(want).unwrap();
+        assert_eq!(
+            to_jcs_string(&reparsed).unwrap(),
+            want,
+            "reparse {bits:016x}"
+        );
+        let normalized_bits = if bits == 0x8000000000000000 { 0 } else { bits };
+        assert_eq!(reparsed.as_f64().unwrap().to_bits(), normalized_bits);
     }
 }
 

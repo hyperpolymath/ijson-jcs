@@ -1,0 +1,52 @@
+// SPDX-License-Identifier: CC-BY-SA-4.0
+= ijson-jcs proof scopes
+:revdate: 2026-11-16
+
+First-party Rust uses Creusot for implementation verification, Pearlite for
+contracts and ghost specifications, and complementary Verus models. No proof
+receipt for this repository is claimed by this ledger. Every scope below is
+OPEN; tests, compilation and imported kyq proofs do not discharge these goals.
+
+[cols="2,4,4",options="header"]
+|===
+|Production surface |Creusot / Pearlite obligation |Complementary Verus obligation
+|`src/strict.rs`, including the explicit binary64 reader
+|Specify duplicate rejection before insertion, recursive mode propagation,
+complete consumption, depth bounds, integer-token scan and diagnostic paths.
+Treat serde's tokenizer and integer-to-float conversion as explicit trust
+boundaries until their behavior is linked to a verified model.
+|Model lexical integers versus rounded binary64 numbers; prove which input
+policies preserve exact integers and how each model admits canonical output.
+|`src/ijson.rs`
+|Specify Unicode noncharacters, finite-number validation, integer bounds and
+bounded traversal. Verify the actual production predicates and recursion.
+|Prove equivalent Unicode and numeric predicates, including boundary cases,
+and refine the model to production code.
+|`src/jcs.rs`
+|Specify UTF-16 ordering, string escaping, number rendering, array order,
+canonical byte determinism and error propagation.
+|Model canonicalization and idempotence over the admitted binary64 domain;
+record ryu-js and serde_json as trusted dependencies until proved otherwise.
+|`src/profile.rs`, `records.rs`, `jsonld.rs`
+|Specify library versus estate-file LF profiles, strict-ingress restrictions,
+record framing and JSON-LD document semantics without remote context fetching.
+|Model framing/normalization composition and distinguish document
+canonicalization from RDF dataset canonicalization.
+|`src/bin/ijson-jcs.rs`
+|Specify bounded reads, exit-status truth, atomic replacement, symlink/hardlink
+rules and platform-specific filesystem assumptions.
+|Model state transitions and failure preservation; prove correspondence with
+Rust and OS operations before claiming transactional guarantees.
+|Tests, fixtures and benchmark code
+|Specify oracle domains, generators and measurement/evidence boundaries.
+|Prove model properties separately from sampled experiments and solver controls.
+|===
+
+The new `parse_jcs` API has explicit binary64 rounding semantics. Existing
+`JsonMode::Strict` and `JsonMode::Canonical` retain their integer-token policy.
+RFC 8785 Appendix B vectors and generated finite-bit-pattern checks are empirical
+coverage, not whole-parser or serializer proofs. A meaningful verification gate
+must execute the production scope and false/true controls and bind its result to
+the tested source revision; an empty successful job is not evidence.
+
+Canonical policy: metadatastician/standards `3-practice/PROOF-POLICY.adoc`.

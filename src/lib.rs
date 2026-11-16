@@ -181,6 +181,30 @@ pub fn parse_json(input: &str, mode: JsonMode) -> Result<Value, IJsonError> {
     }
 }
 
+/// Parse JSON using the RFC 8785 binary64 number model.
+///
+/// This opt-in reader accepts the complete numeric output of [`to_jcs`],
+/// including integral doubles above 2^53-1. Every number is rounded to binary64;
+/// e.g. `9007199254740993` becomes `9007199254740992`. Use [`parse_json`] with
+/// [`JsonMode::Strict`] when integer-token precision must be preserved.
+/// Duplicate keys, noncharacters, lone surrogates, excessive nesting,
+/// non-finite numbers and trailing input are still rejected. This parses the
+/// JCS data model; it does not require the input's whitespace or key order to
+/// already be canonical. No string normalization is performed.
+///
+/// ```
+/// use ijson_jcs::{JsonMode, parse_jcs, parse_json, to_jcs_string};
+/// let bytes = "10000000000000000";
+/// assert!(parse_json(bytes, JsonMode::Strict).is_err());
+/// assert_eq!(to_jcs_string(&parse_jcs(bytes)?).unwrap(), bytes);
+/// # Ok::<(), ijson_jcs::IJsonError>(())
+/// ```
+pub fn parse_jcs(input: &str) -> Result<Value, IJsonError> {
+    let value =
+        strict::from_str_binary64(input).map_err(|source| IJsonError::ParseError { source })?;
+    ijson::validate_canonicalizable(&value)?;
+    Ok(value)
+}
 /// Parse JSON bytes with the specified mode
 pub fn parse_json_bytes(input: &[u8], mode: JsonMode) -> Result<Value, IJsonError> {
     let input_str =

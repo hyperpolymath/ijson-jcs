@@ -47,17 +47,15 @@ See [docs/standards-update.adoc](docs/standards-update.adoc) for each step, the
 negative controls that keep the gate from passing vacuously, and the two things
 only the owner can provision (the estate signing key, and the kyq sync token).
 
-kyq's current build/validator stubs are still not an operational gate; direct
-use of this CLI is transitional enforcement, and `interop/kyq/` is the contract
-kyq has to satisfy rather than evidence that it does.
+kyq's Rust migration consumes this library at an immutable revision. Its native parser and CLI remain candidates until cross-platform and estate admission gates pass. `interop/kyq/` is the independent compatibility contract.
 
 ## Features
 
 - ✅ **I-JSON Validation**: Comprehensive validation of all I-JSON requirements
 - ✅ **JCS Canonicalization**: Deterministic byte-for-byte JSON serialization per RFC 8785
 - ✅ **Dual-Mode APIs**: Loose parsing for compatibility, strict validation for safety
-- ✅ **Full RFC Compliance**: Adheres to both RFC 7493 and RFC 8785 specifications
-- ✅ **Comprehensive Testing**: 33+ unit tests plus doc tests covering all edge cases
+- ✅ **Explicit profile**: RFC 8785 canonical bytes with additional estate I-JSON input restrictions
+- ✅ **Executable evidence**: unit, CLI, RFC vectors, property and documentation tests; see docs/TEST-NEEDS.adoc
 - **Small dependency set**: serde, serde_json and thiserror (not zero dependencies)
 
 ## Fork Relationship
@@ -474,3 +472,16 @@ scripts/standards/kyq-vectors.sh verify --binary target/release/ijson-jcs
 *License*: MPL-2.0  
 *Status*: Active development  
 *Version*: 0.1.0
+
+## Start and AI-assisted setup
+
+Run `./launcher.sh --help`, then `just setup` and `just check`. The native CLI,
+byte-sealed conformance receipts, Podman container and Guix path have separate
+acceptance requirements in [docs/ASSURANCE.adoc](docs/ASSURANCE.adoc).
+
+Ask an assistant:
+
+> Set up ijson-jcs from https://github.com/hyperpolymath/ijson-jcs. Follow docs/AI_INSTALLATION_GUIDE.adoc, read the warm-up for my role, execute the checks and report every unresolved requirement without claiming success.
+
+Warm-ups for users, developers, platform maintainers and theorists are under
+`docs/onboarding/`; maintained wiki sources are under `docs/wiki/`.

@@ -401,7 +401,26 @@ fn non_utf8_filenames_are_processed_without_panicking() {
     use std::os::unix::ffi::OsStringExt;
     let old = temp_file("original.json", b"{\"b\":2,\"a\":1}");
     let path = old.with_file_name(std::ffi::OsString::from_vec(b"name\xff.json".to_vec()));
-    fs::rename(old, &path).unwrap();
+    if let Err(error) = fs::rename(&old, &path) {
+        // APFS refuses malformed UTF-8 names before the CLI can open them.
+        // Still exercise OsString argument handling and require an ordinary
+        // I/O refusal, not a panic or an unconditional skipped test.
+        #[cfg(target_vendor = "apple")]
+        {
+            assert_eq!(
+                error.raw_os_error(),
+                Some(92),
+                "unexpected rename error: {error}"
+            );
+            let output = run_on("check", &[&path]);
+            assert_eq!(output.status.code(), Some(2));
+            assert!(!String::from_utf8_lossy(&output.stderr).contains("panicked"));
+            assert_eq!(fs::read(&old).unwrap(), b"{\"b\":2,\"a\":1}");
+            return;
+        }
+        #[cfg(not(target_vendor = "apple"))]
+        panic!("cannot create the non-UTF-8 fixture: {error}");
+    }
     assert_eq!(run_on("fix", &[&path]).status.code(), Some(0));
     assert_eq!(run_on("check", &[&path]).status.code(), Some(0));
 }

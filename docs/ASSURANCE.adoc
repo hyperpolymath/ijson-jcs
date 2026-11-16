@@ -1,0 +1,23 @@
+// SPDX-License-Identifier: CC-BY-SA-4.0
+= Cross-platform acceptance record
+:revdate: 2026-11-07
+
+The integration work preserves the library's strict parser, canonical byte API,
+estate-file profile, JSON Lines handling and JSON-LD document scope.
+It fixes two Windows failures: sealed receipts/vectors must retain repository
+bytes, and a vector manifest path must use portable separators.
+
+Run cargo test --locked --all-targets and cargo test --locked --doc.
+The existing RFC 8785 vectors, property tests, CLI tests and standards-pin tests
+remain the executable evidence. Canonical library bytes exclude LF; estate files
+include exactly one LF. Strict integer-token policy is stronger than binary64
+canonicalizability; a large float's JCS bytes may not re-enter the strict token
+profile. JSON-LD document canonicalization is not RDF dataset canonicalization.
+
+New provisioning, wiki sources and Podman configuration are integration work,
+not a certificate of cross-platform release readiness. Offline compiled Guix
+packaging, signed Stapeln admission, all current taxonomy dimensions and live
+platform CI still require their own receipts. Native tests do not prove the
+implementation; no whole-library Creusot or Verus theorem is claimed.
+
+Reference standards revision: b8f60511e76c9015d86990317162dce653c92fe1.

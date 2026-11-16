@@ -1,0 +1,12 @@
+// SPDX-License-Identifier: CC-BY-SA-4.0
+= ijson-jcs
+
+Strict I-JSON validation and RFC 8785 canonicalization with explicit library and file byte profiles.
+
+- https://github.com/hyperpolymath/ijson-jcs/blob/main/docs/SETUP.adoc[Setup and launcher]
+- https://github.com/hyperpolymath/ijson-jcs/blob/main/docs/ASSURANCE.adoc[Evidence and limits]
+- https://github.com/hyperpolymath/ijson-jcs/tree/main/docs/onboarding[AI onboarding]
+- https://github.com/hyperpolymath/ijson-jcs[Source and issues]
+
+These tracked wiki sources are reviewed with the implementation. Publishing a
+wiki page does not establish release or proof qualification.

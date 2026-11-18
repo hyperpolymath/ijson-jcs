@@ -485,3 +485,28 @@ Ask an assistant:
 
 Warm-ups for users, developers, platform maintainers and theorists are under
 `docs/onboarding/`; maintained wiki sources are under `docs/wiki/`.
+### Reading JCS binary64 numbers
+
+`parse_jcs(text)` is the explicit RFC 8785 number reader. It rejects duplicate
+names, noncharacters, lone surrogates, excessive nesting, non-finite numbers and
+trailing input, while interpreting every numeric token as IEEE-754 binary64.
+It accepts the complete numeric output of `to_jcs`, including an integral double
+such as `10000000000000000`. It accepts ordinary JSON layout; use the emitted
+JCS bytes for canonical layout and hashing.
+
+This opt-in interpretation may round large integer tokens:
+`9007199254740993` becomes `9007199254740992`. Use `parse_json` with `Strict` or
+`Canonical` when a large integer token must instead be rejected before any
+loss of precision. Those existing modes and the CLI defaults retain their
+safe-integer policy. Use strings for identifiers or arbitrary-precision values.
+
+The distinction matters for round trips: strict ingress accepts `1e16`, whose
+JCS output is `10000000000000000`. That output belongs to the binary64 model;
+feeding it back into the stricter integer-token ingress policy rejects it.
+`parse_jcs` makes this boundary explicit instead of weakening strict validation.
+
+The RFC Appendix B tests now reparse every emitted numeric example and compare
+binary64 bits (normalizing negative zero). Additional generated tests exercise
+finite bit patterns, nested values, explicit rounding and rejection controls.
+These are tests, not a formal proof of decimal/binary64 conversion. See
+[the proof scope ledger](verification/PROOF-STATUS.adoc).

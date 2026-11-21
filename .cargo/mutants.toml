@@ -1,0 +1,43 @@
+# SPDX-License-Identifier: MPL-2.0 AND CC-BY-SA-4.0
+# Code is MPL-2.0; prose is CC-BY-SA-4.0.
+#
+# cargo-mutants configuration for the counted suites.
+#
+# Only the counted suites run, so a surviving mutant means a counted test is
+# missing. Each exclude_re below is an EQUIVALENT mutant: no input can make the
+# mutated program differ from the original, so no test can kill it. The patterns
+# carry no line numbers, so they survive edits elsewhere in the file.
+additional_cargo_test_args = [
+  "--test", "properties",
+  "--test", "proven_properties",
+  "--test", "proven_vectors",
+  "--test", "proven_mutation_kills",
+]
+
+exclude_re = [
+  # ijson.rs is_noncharacter: `||` to `&&`. U+FFFE and U+FFFF are both refused by
+  # the neighbouring range check, so either operator refuses the same set.
+  'replace \|\| with && in is_noncharacter',
+  # ijson.rs validate_number_is_i_json: `>` to `>=`. The u64 branch only sees
+  # values above i64::MAX, so the boundary value is never reached.
+  'replace > with >= in validate_number_is_i_json',
+  # jcs.rs write_number_jcs: `<=` to `>`. Validation refuses integers above
+  # 2^53-1 before writing; that refusal is pinned in proven_mutation_kills.
+  'replace <= with > in write_number_jcs',
+  # strict.rs StrictVisitor::visit_unit and visit_none return Ok(Default::default()),
+  # and the default Value is Null, so replacing the body changes nothing.
+  'StrictVisitor>::visit_unit -> Result<Value, E> with Ok\(Default::default\(\)\)',
+  'StrictVisitor>::visit_none -> Result<Value, E> with Ok\(Default::default\(\)\)',
+  # strict.rs StrictVisitor::expecting only formats the message for a type
+  # mismatch, which deserialize_any never raises.
+  'StrictVisitor>::expecting -> fmt::Result with Ok\(Default::default\(\)\)',
+  # strict.rs StrictVisitor::visit_string: serde_json::from_str never calls it
+  # (it calls visit_str, or visit_borrowed_str).
+  'StrictVisitor>::visit_string -> Result<Value, E> with Ok\(Default::default\(\)\)',
+]
+
+# Deliberately NOT excluded: four mutants in strict.rs check_integer_tokens
+# (`+=` to `*=` at the lines that advance the scan position, and `+=` to `-=` at
+# the loop step) turn a loop into an infinite one. They are caught by the hang
+# timeout, not by an assertion, and stay in every run's timeout.txt as the
+# expected 4 timeouts.

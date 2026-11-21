@@ -1,0 +1,16 @@
+# SPDX-License-Identifier: MPL-2.0 AND CC-BY-SA-4.0
+# Code is MPL-2.0; prose is CC-BY-SA-4.0.
+# Written coverage exclusions for the counted (proven) run. Each entry is bound
+# to the sha256 of its source lines (joined with LF): an edit to an excluded
+# line makes the entry stale and the gate fails until it is re-justified.
+# path	lines	sha256	kind	reason
+src/bin/ijson-jcs.rs	227	86afdf70a95436e883aa7fc5c06a2ab083719054438f1218d15ebdaf287b4bac	unreachable	implicit else of `if let Some(permissions)`: in fix mode permissions is always Some (check mode returned earlier)
+src/bin/ijson-jcs.rs	280	86afdf70a95436e883aa7fc5c06a2ab083719054438f1218d15ebdaf287b4bac	unreachable	same as line 227, in fix-jsonl
+src/ijson.rs	217	2a44168318e224e1f830fe9ab620aa00dd4f7b3fb19ef4399abf59593cf0756d	unreachable	u64 at or below 2^53-1 is always also an i64, so the first branch takes it
+src/ijson.rs	221-224	afced9dbdd974f8cf35d6d3aedbcbd87996442c0cac6277c28ebd26722862bfc	unreachable	serde_json::Number cannot hold a non-finite double (Number::from_f64 refuses NaN and infinities)
+src/ijson.rs	234	28d86778615f6af47bb1bc4f40face756749768e5111f114cfa234a5060c25af	unreachable	implicit else after as_f64(): a serde_json::Number is always i64, u64 or f64
+src/jcs.rs	125-126	78794b4982c6b480eda0ee4efa87c54898f9b52aba2a31b5a38520c26e9f39ef	unreachable	u64 at or below 2^53-1 is always also an i64, so the first branch takes it
+src/jcs.rs	145	eff5313cfd9eb5a1150c6c7f8f74f8ecbdffd415cd5ed94092b960f0ce737aa3	unreachable	es_number_to_string is only called with a Number's f64, which is always finite
+src/jsonld.rs	89-92	402488d41ddef455de57876a02b952263b009c7276aad704a0651f11073670e3	unreachable	JCS output is built from UTF-8 strings and ASCII escapes, so from_utf8 cannot fail
+src/strict.rs	45-47	10cec3347de43875134bcc80b462ce19cbe071095b3c736c864bd4d4c98ebf0e	unreachable	Visitor::expecting is only called for a type mismatch; serde_json's deserialize_any always picks the matching visit_* method
+src/strict.rs	187	1e7485fbef031241f6cabf64563ef6f5973ecf51e927241b2147bff185decac8	unreachable	a comma at nesting depth 0 is impossible in text that has already parsed as JSON

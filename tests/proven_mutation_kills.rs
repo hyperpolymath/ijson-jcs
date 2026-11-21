@@ -10,6 +10,7 @@ use ijson_jcs::{
     IJsonError, JsonMode, ValidationError, Value, parse_json, to_jcs, validate_i_json,
 };
 use std::fs;
+#[cfg(unix)]
 use std::path::Path;
 use support::{run, scratch};
 
@@ -180,6 +181,7 @@ fn error_path_suffix_only_when_there_is_a_path() {
     );
 }
 
+#[cfg(unix)]
 fn messy(dir: &Path) -> std::path::PathBuf {
     let path = dir.join("messy.json");
     fs::write(&path, b"{ \"b\" : 1 , \"a\" : 2 }").unwrap();
@@ -258,7 +260,7 @@ fn temporary_name_too_long_is_reported_as_the_os_error() {
     let mut dir = base.clone();
     let want = 4084;
     let len = |p: &Path| p.as_os_str().len();
-    while len(&dir) + 201 <= want {
+    while len(&dir) + 203 <= want {
         dir.push("d".repeat(200));
     }
     let rest = want - len(&dir);

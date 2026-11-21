@@ -7,6 +7,10 @@
 //! To re-pin after an intended change, run with IJSON_JCS_PRINT_DIGESTS=1:
 //! the run prints every digest and then fails, so it can never pass that way.
 
+// The CLI vectors need Unix fixtures (symlinks, hard links, modes); on other
+// targets their helpers are unused.
+#![cfg_attr(not(unix), allow(dead_code, unused_imports))]
+
 mod support;
 
 use ijson_jcs::{JsonMode, Value, parse_json_bytes, to_jcs, to_jcs_string};
@@ -302,6 +306,7 @@ fn jsonl_symlinked(d: &Path) {
 
 const RFC_IN: &[u8] = br#"{"numbers":[333333333.33333329,1E30,4.50,2e-3,0.000000000000000000000000001],"literals":[null,true,false]}"#;
 
+#[cfg(unix)]
 fn cli_vectors() -> Vec<Cli> {
     macro_rules! v {
         ($name:literal, [$($a:literal),*], $stdin:expr, $prep:expr, $exit:literal, $phrase:literal, $digest:literal) => {

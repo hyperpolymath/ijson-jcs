@@ -40,7 +40,7 @@ done <"$exclusions"
 # Every zero-hit line must be excluded; every exclusion must be a real gap.
 report=$(awk -v root="$PWD/" -v ex="$excluded" '
   BEGIN { while ((getline line < ex) > 0) want[line] = 1 }
-  /^SF:/ { file = substr($0, 4); sub(root, "", file) }
+  /^SF:/ { file = substr($0, 4); if (index(file, root) == 1) file = substr(file, length(root) + 1) }
   /^DA:/ {
     split(substr($0, 4), f, ","); key = file ":" f[1]; total++
     if (f[2] > 0) { covered++; if (key in want) print "COVERED-BUT-EXCLUDED " key }
@@ -49,6 +49,7 @@ report=$(awk -v root="$PWD/" -v ex="$excluded" '
   }
   END {
     for (k in want) if (!(k in seen)) print "UNUSED-EXCLUSION " k
+    if (total == 0) print "EMPTY-REPORT no DA records in the coverage report"
     printf "SUMMARY lines=%d covered=%d excluded=%d\n", total, covered, excl
   }' "$lcov")
 echo "$report"

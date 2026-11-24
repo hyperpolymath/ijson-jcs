@@ -59,8 +59,20 @@ fn binary64_retains_structural_and_unicode_rejections() {
     ] {
         assert!(parse_jcs(input).is_err(), "{input}");
     }
-    let too_deep = format!("{}0{}", "[".repeat(129), "]".repeat(129));
-    assert!(parse_jcs(&too_deep).is_err());
+}
+
+#[test]
+fn binary64_reader_array_nesting_boundary() {
+    let nested_arrays = |depth| format!("{}0{}", "[".repeat(depth), "]".repeat(depth));
+
+    parse_jcs(&nested_arrays(127)).expect("127 nested arrays should parse");
+    for depth in [128, 129] {
+        let error = parse_jcs(&nested_arrays(depth)).unwrap_err();
+        assert!(
+            error.is_parse_error(),
+            "expected a parse error at depth {depth}, got {error}"
+        );
+    }
 }
 
 proptest! {

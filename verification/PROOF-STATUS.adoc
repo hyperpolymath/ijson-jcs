@@ -71,13 +71,15 @@ Canonical modes and is not on the `parse_jcs` path.
 |Termination under the depth limit
 |Creusot/Pearlite: variant on `validate_value` (`depth` against `MAX_DEPTH`
 = 128). Verus: model of the nested-value recursion.
-|Parse recursion is bounded by serde_json's own recursion limit, which is
-trusted (`ASSUMED`). Pin down the exact bound: a probe in a scratch copy
-(not committed) rejected 128 nested arrays, so serde's limit is reached
-before `MAX_DEPTH`; the committed test only covers 129.
+|`parse_jcs` accepts 127 nested arrays around a scalar. At 128 and 129,
+serde_json's recursion limit produces a parse error before value validation.
+The parser's recursion guard is trusted (`ASSUMED`). For constructed values,
+the validator accepts 128 nested arrays and rejects 129.
 |`TESTED`
-|Bound is the committed 129-level test only. Next action: state which limit
-governs, add a 128-level test, then specify the variant in Pearlite.
+|`binary64_reader_array_nesting_boundary` covers the text input boundary in
+`tests/binary64_reader.rs`. `constructed_values_are_depth_bounded_before_serialization`
+covers the validator in `tests/conformance.rs`. The Pearlite termination
+variant remains open.
 
 |No panic on any input
 |Creusot/Pearlite: panic-freedom of `parse_jcs`, the visitor and

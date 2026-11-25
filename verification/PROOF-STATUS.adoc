@@ -52,7 +52,7 @@ the tested source revision; an empty successful job is not evidence.
 == Plan: `parse_jcs` and the binary64 reader in `src/strict.rs`
 
 Planning only (owner ruling: plan the proof scopes now, prove after). No
-verifier has been run on this repository. Status tokens are the closed §5
+production Creusot or Verus result is recorded. Status tokens are the closed §5
 vocabulary of the proof policy; a pending required proof stays `OPEN` with the
 reason in the last column. Creusot (with Pearlite contracts) and Verus are both
 planned by default (policy §1.2). Using both is not two independent witnesses:
@@ -78,8 +78,8 @@ the validator accepts 128 nested arrays and rejects 129.
 |`TESTED`
 |`binary64_reader_array_nesting_boundary` covers the text input boundary in
 `tests/binary64_reader.rs`. `constructed_values_are_depth_bounded_before_serialization`
-covers the validator in `tests/conformance.rs`. The Pearlite termination
-variant remains open.
+covers the validator in `tests/conformance.rs`. The production recursive-call
+obligation is `OPEN` (see <<validator-descent>>).
 
 |No panic on any input
 |Creusot/Pearlite: panic-freedom of `parse_jcs`, the visitor and
@@ -138,6 +138,28 @@ integer tokens outside ±(2^53−1), `parse_jcs` does not
 |`TESTED`
 |`tests/binary64_reader.rs` checks five integer tokens in both modes. No proof.
 |===
+
+[[validator-descent]]
+=== Recursive descent in the value validator (2026-11-25)
+
+Source inspected: `03c30a827cafe537a067b0a4b6db49d8331f852b`.
+`validate_i_json` starts `validate_value` at depth zero. Both recursive
+calls (object member and array element) pass `depth + 1` after the guard
+has established `depth < MAX_DEPTH`. A scalar at the limit returns without
+recursing. With `MAX_DEPTH = 128`, the addition fits in `usize`.
+
+Next proof step (`OPEN`): express `depth <= MAX_DEPTH` as the entry
+invariant and `MAX_DEPTH - depth` as a mathematical-integer variant in
+Pearlite. Use Creusot on the two production call sites to show that each
+child preserves the invariant and strictly decreases the nonnegative variant.
+This step covers recursive edges. Iterator termination and serde_json's text
+parser have separate obligations.
+
+Local arithmetic check: link:validate-value-depth.smt2[SMT-LIB model].
+Z3 4.13.3 returned `sat` for the final permitted descent, `unsat` for a
+counterexample to the increment, and `sat` for a planted same-depth call.
+The model encodes the guard and increment by hand. Source linkage still
+requires the Creusot check. Both depth regression tests passed locally.
 
 === Verifier availability on this host (2026-11-18)
 

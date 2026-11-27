@@ -29,10 +29,10 @@ fn clean_fault_pairs_have_the_expected_diagnosis() {
 
 #[test]
 fn empty_path_segments_survive_nesting_and_sibling_visits() {
-    for number in ["9007199254740992", "18446744073709551616"] {
-        let input = format!(r#"{{"a":{{"":{{"":{{"b~/c":{number}}}}}}}}}"#);
-        let error = parse_json(&input, JsonMode::Strict).unwrap_err();
-        assert_eq!(error.as_validation_error().unwrap().path(), "a///b~0~1c");
+    for number in [9007199254740992u64, 18446744073709551615] {
+        let value = json!({"a": {"": {"": {"b~/c": number}}}});
+        let error = validate_i_json(&value).unwrap_err();
+        assert_eq!(error.path(), "a///b~0~1c");
     }
     let value = json!({"a": {"": [], "b": {"": "\u{ffff}"}}});
     assert_eq!(validate_i_json(&value).unwrap_err().path(), "a/b/");
@@ -63,12 +63,14 @@ fn text_depth_limit_is_not_disabled() {
 }
 
 #[test]
-fn historical_float_and_integer_token_distinction_is_explicit() {
-    // Do NOT silently weaken the estate integer-token rule to make a broad
-    // round-trip property pass. `fix` refuses to install such an output.
+fn integral_doubles_round_trip_through_every_strict_mode() {
+    // Owner ruling (0.2.0): Strict and Canonical read the RFC 8785 binary64
+    // model, so every byte string `to_jcs` emits reparses.
     let value = parse_json("1e20", JsonMode::Canonical).unwrap();
     let bytes = to_jcs(&value).unwrap();
     assert_eq!(bytes, b"100000000000000000000");
-    assert!(parse_json_bytes(&bytes, JsonMode::Canonical).is_err());
-    assert!(parse_json_bytes(&bytes, JsonMode::Loose).is_ok());
+    for mode in [JsonMode::Strict, JsonMode::Canonical, JsonMode::Loose] {
+        let again = parse_json_bytes(&bytes, mode).unwrap();
+        assert_eq!(to_jcs(&again).unwrap(), bytes, "{mode}");
+    }
 }

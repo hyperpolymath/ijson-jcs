@@ -4,7 +4,7 @@ use ijson_jcs::{JsonMode, Value, parse_jcs, parse_json, to_jcs_string};
 use proptest::prelude::*;
 
 #[test]
-fn binary64_is_explicit_and_strict_integer_checks_remain() {
+fn binary64_model_applies_to_every_parse_mode() {
     for (input, expected) in [
         ("9007199254740992", "9007199254740992"),
         ("9007199254740993", "9007199254740992"),
@@ -14,13 +14,14 @@ fn binary64_is_explicit_and_strict_integer_checks_remain() {
     ] {
         assert_eq!(to_jcs_string(&parse_jcs(input).unwrap()).unwrap(), expected);
         for mode in [JsonMode::Strict, JsonMode::Canonical] {
-            assert!(parse_json(input, mode).is_err(), "{mode}: {input}");
+            let value = parse_json(input, mode).unwrap();
+            assert_eq!(to_jcs_string(&value).unwrap(), expected, "{mode}: {input}");
         }
     }
     let source = "1e16";
     let canonical = to_jcs_string(&parse_json(source, JsonMode::Strict).unwrap()).unwrap();
     assert_eq!(canonical, "10000000000000000");
-    assert!(parse_json(&canonical, JsonMode::Strict).is_err());
+    assert!(parse_json(&canonical, JsonMode::Strict).is_ok());
     assert_eq!(
         to_jcs_string(&parse_jcs(&canonical).unwrap()).unwrap(),
         canonical
@@ -51,6 +52,7 @@ fn binary64_retains_structural_and_unicode_rejections() {
         r#""\ufdd0""#,
         r#"{"\uffff":0}"#,
         "1e400",
+        "-1e400",
         "NaN",
         "Infinity",
         "0 1",
@@ -59,6 +61,19 @@ fn binary64_retains_structural_and_unicode_rejections() {
     ] {
         assert!(parse_jcs(input).is_err(), "{input}");
     }
+}
+
+#[test]
+fn binary64_underflow_rounds_to_zero_and_drops_sign() {
+    for input in ["1e-400", "-1e-400", "0e0", "-0.0", "2e-324", "[1e-400]"] {
+        for mode in [JsonMode::Strict, JsonMode::Canonical] {
+            let value = parse_json(input, mode).unwrap();
+            let expected = if input.starts_with('[') { "[0]" } else { "0" };
+            assert_eq!(to_jcs_string(&value).unwrap(), expected, "{mode}: {input}");
+        }
+        assert!(parse_jcs(input).is_ok(), "{input}");
+    }
+    assert_eq!(parse_jcs("5e-324").unwrap().as_f64(), Some(5e-324));
 }
 
 #[test]

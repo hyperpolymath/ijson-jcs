@@ -165,7 +165,7 @@ mod tests {
         for bad in [
             &br#"{"@id":"a","@id":"b"}"#[..],
             br#"{"@id":"\ud800"}"#,
-            br#"{"@value":18446744073709551616}"#,
+            br#"{"@value":1e400}"#,
             b"{\"@id\": }",
         ] {
             assert!(

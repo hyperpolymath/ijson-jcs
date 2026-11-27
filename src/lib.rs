@@ -154,11 +154,14 @@ pub use serde_json::Value;
 /// rejected (RFC 7493 §2.3) during parsing, since a parsed `Value` can no
 /// longer show that a duplicate existed.
 ///
-/// For the same reason those modes check integer tokens in the text itself:
-/// an integer beyond the `i64`/`u64` range reaches the `Value` as a float,
-/// so a token outside ±(2^53−1) such as `18446744073709551616` is an
-/// `UnsafeInteger` error read from `input`, not from the `Value`. Float
-/// tokens (`1.5`, `1e30`) are accepted.
+/// Those modes read every number as IEEE-754 binary64, the RFC 8785 number
+/// model, so the full output of [`to_jcs`] reparses. An integer token beyond
+/// ±(2^53−1) rounds to the nearest double (`9007199254740993` becomes
+/// `9007199254740992`), a nonzero token below the smallest subnormal such as
+/// `1e-400` rounds to zero, and a token that overflows (`1e400`) is a parse
+/// error. Use strings for identifiers or arbitrary-precision values.
+/// Container nesting is limited to 127 levels, the serde_json recursion
+/// limit; the same bound applies to [`parse_jcs`].
 pub fn parse_json(input: &str, mode: JsonMode) -> Result<Value, IJsonError> {
     let parsed = match mode {
         JsonMode::Loose => serde_json::from_str(input),
@@ -170,12 +173,10 @@ pub fn parse_json(input: &str, mode: JsonMode) -> Result<Value, IJsonError> {
         JsonMode::Loose => Ok(value),
         JsonMode::Strict => {
             ijson::validate_i_json(&value)?;
-            strict::check_integer_tokens(input)?;
             Ok(value)
         }
         JsonMode::Canonical => {
             ijson::validate_canonicalizable(&value)?;
-            strict::check_integer_tokens(input)?;
             Ok(value)
         }
     }
@@ -183,28 +184,23 @@ pub fn parse_json(input: &str, mode: JsonMode) -> Result<Value, IJsonError> {
 
 /// Parse JSON using the RFC 8785 binary64 number model.
 ///
-/// This opt-in reader accepts the complete numeric output of [`to_jcs`],
-/// including integral doubles above 2^53-1. Every number is rounded to binary64;
-/// e.g. `9007199254740993` becomes `9007199254740992`. Use [`parse_json`] with
-/// [`JsonMode::Strict`] when integer-token precision must be preserved.
-/// Duplicate keys, noncharacters, lone surrogates, excessive nesting,
-/// non-finite numbers and trailing input are still rejected. This parses the
-/// JCS data model; it does not require the input's whitespace or key order to
-/// already be canonical. No string normalization is performed.
+/// Equivalent to [`parse_json`] with [`JsonMode::Canonical`]; kept as an
+/// explicit entry point for callers reparsing [`to_jcs`] output. Every number
+/// is rounded to binary64. Duplicate keys, noncharacters, lone surrogates,
+/// excessive nesting (more than 127 levels), non-finite numbers and trailing
+/// input are rejected. Whitespace and key order need not be canonical.
 ///
 /// ```
-/// use ijson_jcs::{JsonMode, parse_jcs, parse_json, to_jcs_string};
+/// use ijson_jcs::{parse_jcs, to_jcs_string};
 /// let bytes = "10000000000000000";
-/// assert!(parse_json(bytes, JsonMode::Strict).is_err());
 /// assert_eq!(to_jcs_string(&parse_jcs(bytes)?).unwrap(), bytes);
+/// assert_eq!(to_jcs_string(&parse_jcs("1e-400")?).unwrap(), "0");
 /// # Ok::<(), ijson_jcs::IJsonError>(())
 /// ```
 pub fn parse_jcs(input: &str) -> Result<Value, IJsonError> {
-    let value =
-        strict::from_str_binary64(input).map_err(|source| IJsonError::ParseError { source })?;
-    ijson::validate_canonicalizable(&value)?;
-    Ok(value)
+    parse_json(input, JsonMode::Canonical)
 }
+
 /// Parse JSON bytes with the specified mode
 pub fn parse_json_bytes(input: &[u8], mode: JsonMode) -> Result<Value, IJsonError> {
     let input_str =
@@ -265,53 +261,38 @@ mod tests {
         assert!(!is_valid_i_json_bytes(b"{\"k\":1,\"k\":2}"));
     }
 
-    /// Strict and Canonical refuse an integer token beyond `u64`/`i64`, at
-    /// top level and nested, naming the token and its path; Loose accepts it.
+    /// Strict and Canonical read every number as binary64: integer tokens
+    /// beyond ±(2^53−1) round, underflow rounds to zero, overflow is refused.
     #[test]
-    fn test_over_range_integer_tokens_refused() {
-        for (input, token, path) in [
-            ("18446744073709551616", "18446744073709551616", ""),
-            ("[18446744073709551617]", "18446744073709551617", "0"),
-            ("[-9223372036854775809]", "-9223372036854775809", "0"),
+    fn test_binary64_number_model() {
+        for (input, canonical) in [
+            ("9007199254740991", "9007199254740991"),
+            ("9007199254740993", "9007199254740992"),
+            ("-9007199254740993", "-9007199254740992"),
+            ("18446744073709551616", "18446744073709552000"),
+            ("[-9223372036854775809]", "[-9223372036854776000]"),
             (
                 r#"{"ttl":18446744073709551616}"#,
-                "18446744073709551616",
-                "ttl",
+                r#"{"ttl":18446744073709552000}"#,
             ),
-            (
-                r#"{"a":[1,{"b":[2,-99999999999999999999999]}]}"#,
-                "-99999999999999999999999",
-                "a/1/b/1",
-            ),
+            ("1e-400", "0"),
+            ("-1e-400", "0"),
+            ("[5e-324,0e0,0.0]", "[5e-324,0,0]"),
         ] {
-            let want = ValidationError::UnsafeInteger {
-                value: token.to_string(),
-                path: path.to_string(),
-            };
             for mode in [JsonMode::Strict, JsonMode::Canonical] {
-                let err = parse_json(input, mode).unwrap_err();
-                assert_eq!(err.as_validation_error(), Some(&want), "{mode}: {input}");
-                let err = parse_json_bytes(input.as_bytes(), mode).unwrap_err();
-                assert_eq!(err.as_validation_error(), Some(&want), "{mode}: {input}");
+                let value =
+                    parse_json(input, mode).unwrap_or_else(|e| panic!("{mode}: {input}: {e}"));
+                assert_eq!(to_jcs_string(&value).unwrap(), canonical, "{mode}: {input}");
+                let bytes = parse_json_bytes(input.as_bytes(), mode).unwrap();
+                assert_eq!(bytes, value, "{mode}: {input}");
             }
-            assert!(parse_json(input, JsonMode::Loose).is_ok(), "Loose: {input}");
+            assert!(is_valid_i_json_string(input), "{input}");
         }
-        assert!(!is_valid_i_json_string(r#"{"ttl":18446744073709551616}"#));
-        assert!(!is_valid_i_json_bytes(b"[18446744073709551616]"));
-    }
-
-    /// The token check reports the same path as `validate_i_json` reports
-    /// for an unsafe integer at the same place.
-    #[test]
-    fn test_over_range_path_matches_validate_i_json() {
-        let path = |n: &str| {
-            let input = format!(r#"{{"a":[1,{{"b~/c":[2,{n}]}}]}}"#);
-            let err = parse_json(&input, JsonMode::Strict).unwrap_err();
-            err.as_validation_error().unwrap().path().to_string()
-        };
-        // 2^53 + 1 fits a u64, so `validate_i_json` refuses it from the Value.
-        assert_eq!(path("9007199254740993"), "a/1/b~0~1c/1");
-        assert_eq!(path("18446744073709551616"), "a/1/b~0~1c/1");
+        for input in ["1e400", "-1e400", "[1e999]", "123e999999"] {
+            for mode in [JsonMode::Strict, JsonMode::Canonical] {
+                assert!(parse_json(input, mode).is_err(), "{mode}: {input}");
+            }
+        }
     }
 
     /// Safe-range integers, float tokens and over-range digits inside

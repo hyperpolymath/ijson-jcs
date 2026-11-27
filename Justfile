@@ -43,6 +43,11 @@ test:
     cargo test --locked --all-targets
     cargo test --locked --doc
 
+# Whole-crate counted coverage (needs cargo-llvm-cov), then the gate's own fixtures
+proven-coverage:
+    bash scripts/proven-coverage.sh
+    bash scripts/tests/proven-coverage-test.sh
+
 # Measure release builds; retain host/compiler information with the result
 bench:
     cargo bench --locked

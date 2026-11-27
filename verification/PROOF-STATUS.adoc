@@ -1,0 +1,165 @@
+// SPDX-License-Identifier: CC-BY-SA-4.0
+= ijson-jcs proof scopes
+:revdate: 2026-11-16
+
+First-party Rust uses Creusot for implementation verification, Pearlite for
+contracts and ghost specifications, and complementary Verus models. No proof
+receipt for this repository is claimed by this ledger. Every scope below is
+OPEN; tests, compilation and imported kyq proofs do not discharge these goals.
+
+[cols="2,4,4",options="header"]
+|===
+|Production surface |Creusot / Pearlite obligation |Complementary Verus obligation
+|`src/strict.rs`, including the explicit binary64 reader
+|Specify duplicate rejection before insertion, recursive mode propagation,
+complete consumption, depth bounds, integer-token scan and diagnostic paths.
+Treat serde's tokenizer and integer-to-float conversion as explicit trust
+boundaries until their behavior is linked to a verified model.
+|Model lexical integers versus rounded binary64 numbers; prove which input
+policies preserve exact integers and how each model admits canonical output.
+|`src/ijson.rs`
+|Specify Unicode noncharacters, finite-number validation, integer bounds and
+bounded traversal. Verify the actual production predicates and recursion.
+|Prove equivalent Unicode and numeric predicates, including boundary cases,
+and refine the model to production code.
+|`src/jcs.rs`
+|Specify UTF-16 ordering, string escaping, number rendering, array order,
+canonical byte determinism and error propagation.
+|Model canonicalization and idempotence over the admitted binary64 domain;
+record ryu-js and serde_json as trusted dependencies until proved otherwise.
+|`src/profile.rs`, `records.rs`, `jsonld.rs`
+|Specify library versus estate-file LF profiles, strict-ingress restrictions,
+record framing and JSON-LD document semantics without remote context fetching.
+|Model framing/normalization composition and distinguish document
+canonicalization from RDF dataset canonicalization.
+|`src/bin/ijson-jcs.rs`
+|Specify bounded reads, exit-status truth, atomic replacement, symlink/hardlink
+rules and platform-specific filesystem assumptions.
+|Model state transitions and failure preservation; prove correspondence with
+Rust and OS operations before claiming transactional guarantees.
+|Tests, fixtures and benchmark code
+|Specify oracle domains, generators and measurement/evidence boundaries.
+|Prove model properties separately from sampled experiments and solver controls.
+|===
+
+The new `parse_jcs` API has explicit binary64 rounding semantics. Existing
+`JsonMode::Strict` and `JsonMode::Canonical` retain their integer-token policy.
+RFC 8785 Appendix B vectors and generated finite-bit-pattern checks are empirical
+coverage, not whole-parser or serializer proofs. A meaningful verification gate
+must execute the production scope and false/true controls and bind its result to
+the tested source revision; an empty successful job is not evidence.
+
+== Plan: `parse_jcs` and the binary64 reader in `src/strict.rs`
+
+Planning only (owner ruling: plan the proof scopes now, prove after). No
+verifier has been run on this repository. Status tokens are the closed §5
+vocabulary of the proof policy; a pending required proof stays `OPEN` with the
+reason in the last column. Creusot (with Pearlite contracts) and Verus are both
+planned by default (policy §1.2). Using both is not two independent witnesses:
+they share the SMT back-end trust, and a Verus model written separately from
+the production code is not a proof of that code.
+
+Entrypoints: `parse_jcs` (`src/lib.rs`), `strict::from_str_binary64` and
+`StrictVisitor<true>` (`src/strict.rs`), `ijson::validate_canonicalizable`
+(`src/ijson.rs`). `strict::check_integer_tokens` belongs to the Strict and
+Canonical modes and is not on the `parse_jcs` path.
+
+[cols="3,2,3,1,3",options="header"]
+|===
+|Obligation |Verifier scope |Specification and assumptions |Status |Reason / next action
+
+|Termination under the depth limit
+|Creusot/Pearlite: variant on `validate_value` (`depth` against `MAX_DEPTH`
+= 128). Verus: model of the nested-value recursion.
+|`parse_jcs` accepts 127 nested arrays around a scalar. At 128 and 129,
+serde_json's recursion limit produces a parse error before value validation.
+The parser's recursion guard is trusted (`ASSUMED`). For constructed values,
+the validator accepts 128 nested arrays and rejects 129.
+|`TESTED`
+|`binary64_reader_array_nesting_boundary` covers the text input boundary in
+`tests/binary64_reader.rs`. `constructed_values_are_depth_bounded_before_serialization`
+covers the validator in `tests/conformance.rs`. The Pearlite termination
+variant remains open.
+
+|No panic on any input
+|Creusot/Pearlite: panic-freedom of `parse_jcs`, the visitor and
+`validate_value`. Kani: not applicable to the library (see below).
+|Needs a contract for serde_json's `Deserializer` (trust boundary, `ASSUMED`).
+`visit_i64` and `visit_u64` use `as f64`, which rounds to nearest even
+(inferred from the Rust reference, not checked here).
+|`OPEN`
+|Creusot not installed here, so not run. `tests/properties.rs` feeds arbitrary
+bytes to `parse_json_bytes` (Canonical) only; none reaches `parse_jcs`.
+Adding one is the `TESTED` step.
+
+|Accepted language = JSON grammar restricted to I-JSON and finite binary64
+|Verus: model of the grammar, the I-JSON string predicate and the
+finite-binary64 predicate, then refinement to production. Creusot/Pearlite:
+contract on `parse_jcs` against that model.
+|Must state what "finite binary64" admits. Scratch probes accepted `-0` and
+`1e-400` (underflow to zero) and rejected `1e999`, `1E400`, `1.8e308`.
+The grammar itself comes from serde_json (`ASSUMED`).
+|`OPEN`
+|Verus not installed here, so not run. Next action: write the predicate, then
+underflow to zero is the owner ruling of 2026-11-27 (matches ECMAScript
+`JSON.parse`) and is covered by a test; the 127-level parse bound (serde_json
+recursion limit, against 128 for constructed values) is also an owner ruling
+of 2026-11-27.
+
+|Round trip: `parse_jcs(emit(x))` has the same bits as `x` for every finite `x`
+(`-0.0` returns as `0.0` by design)
+|Creusot/Pearlite: statement over `to_jcs` and `parse_jcs` together. Verus:
+model over the binary64 domain.
+|Rests on ryu-js shortest-digits and serde_json `float_roundtrip` parsing,
+both external and unverified (`ASSUMED`).
+|`TESTED`
+|RFC 8785 Appendix B vectors and a proptest over random `u64` bit patterns
+(`tests/rfc8785.rs`, `tests/binary64_reader.rs`); the proptest samples, it
+does not cover all 2^64 patterns. Proof needs a verified shortest-digit
+model: not started.
+
+|Duplicate-key rejection
+|Creusot/Pearlite: `visit_map` rejects before insertion, at any depth.
+Verus: model of key-set membership.
+|Keys are compared after serde decodes escapes (`"a"` equals `"a"`);
+that decoding is trusted (`ASSUMED`).
+|`TESTED`
+|Unit tests in `strict.rs` and `tests/binary64_reader.rs`, including the
+escaped-key case. No proof.
+
+|Complete-input validation (trailing text rejected)
+|Creusot/Pearlite: `deserializer.end()` is reached on every success path.
+|Relies on serde's `end()` (`ASSUMED`).
+|`TESTED`
+|Covered by `0 1`, `[1,]` and `{` cases. No proof.
+
+|Mode distinction preserved: `parse_json` Strict and Canonical still reject
+integer tokens outside ±(2^53−1), `parse_jcs` does not
+|Creusot/Pearlite: `parse_json` never instantiates `StrictValue<true>`; only
+`parse_jcs` does. Verus: model of the integer-token policy.
+|Const-generic flag `BINARY64` is `false` on every `parse_json` path.
+|`TESTED`
+|`tests/binary64_reader.rs` checks five integer tokens in both modes. No proof.
+|===
+
+=== Verifier availability on this host (2026-11-18)
+
+[cols="2,1,3",options="header"]
+|===
+|Tool |Present |Consequence
+|Creusot (`creusot`, `cargo-creusot`) |no |No Creusot/Pearlite result exists. Rows stay `OPEN` or `TESTED`.
+|Verus (`verus`, `cargo-verus`) |no |No Verus result exists.
+|Kani (`kani`, `cargo-kani`) |no |Not run.
+|Why3, Z3, CVC5 |no |No solver was available either.
+|===
+
+Only `cargo build`, `cargo test`, `cargo clippy` and `cargo fmt --check` were
+run, and they produce `TESTED` evidence at most.
+
+Kani: the crate has `#![forbid(unsafe_code)]` and no FFI in the library, so
+there is no seam of the kind policy §4.1 reserves for Kani, and it is not
+applicable to `parse_jcs`. A bounded Kani harness on the byte scan in
+`check_integer_tokens` (indexing after a valid-JSON precondition) is possible
+later and would be `TESTED` with stated unwinding bounds.
+
+Canonical policy: metadatastician/standards `3-practice/PROOF-POLICY.adoc`.

@@ -26,19 +26,21 @@ use crate::error::ValidationError;
 use crate::ijson::{SAFE_UINT_MAX, json_pointer_encode};
 
 /// A `serde_json::Value` that was deserialized with duplicate keys rejected.
-struct StrictValue(Value);
+struct StrictValue<const BINARY64: bool>(Value);
 
-impl<'de> Deserialize<'de> for StrictValue {
+impl<'de, const BINARY64: bool> Deserialize<'de> for StrictValue<BINARY64> {
     /// Deserialize any JSON value, failing on a duplicate object key.
     fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
-        deserializer.deserialize_any(StrictVisitor).map(StrictValue)
+        deserializer
+            .deserialize_any(StrictVisitor::<BINARY64>)
+            .map(StrictValue)
     }
 }
 
 /// Visitor that builds a `Value`, rejecting objects with repeated keys.
-struct StrictVisitor;
+struct StrictVisitor<const BINARY64: bool>;
 
-impl<'de> Visitor<'de> for StrictVisitor {
+impl<'de, const BINARY64: bool> Visitor<'de> for StrictVisitor<BINARY64> {
     type Value = Value;
 
     /// Describe what this visitor accepts, for serde error messages.
@@ -53,12 +55,20 @@ impl<'de> Visitor<'de> for StrictVisitor {
 
     /// Accept a JSON number that fits in an `i64`.
     fn visit_i64<E: de::Error>(self, v: i64) -> Result<Value, E> {
-        Ok(Value::Number(v.into()))
+        if BINARY64 {
+            self.visit_f64(v as f64)
+        } else {
+            Ok(Value::Number(v.into()))
+        }
     }
 
     /// Accept a JSON number that fits in a `u64`.
     fn visit_u64<E: de::Error>(self, v: u64) -> Result<Value, E> {
-        Ok(Value::Number(v.into()))
+        if BINARY64 {
+            self.visit_f64(v as f64)
+        } else {
+            Ok(Value::Number(v.into()))
+        }
     }
 
     /// Accept a JSON number parsed as a double; non-finite values are refused.
@@ -91,7 +101,7 @@ impl<'de> Visitor<'de> for StrictVisitor {
     /// Accept a JSON array, deserializing each element strictly.
     fn visit_seq<A: SeqAccess<'de>>(self, mut seq: A) -> Result<Value, A::Error> {
         let mut items = Vec::new();
-        while let Some(StrictValue(item)) = seq.next_element()? {
+        while let Some(StrictValue(item)) = seq.next_element::<StrictValue<BINARY64>>()? {
             items.push(item);
         }
         Ok(Value::Array(items))
@@ -106,7 +116,7 @@ impl<'de> Visitor<'de> for StrictVisitor {
                     "duplicate object key {key:?} (forbidden by RFC 7493 §2.3)"
                 )));
             }
-            let StrictValue(value) = access.next_value()?;
+            let StrictValue(value) = access.next_value::<StrictValue<BINARY64>>()?;
             map.insert(key, value);
         }
         Ok(Value::Object(map))
@@ -120,11 +130,19 @@ impl<'de> Visitor<'de> for StrictVisitor {
 /// collapsed to its last member.
 pub(crate) fn from_str_no_duplicates(input: &str) -> Result<Value, serde_json::Error> {
     let mut deserializer = serde_json::Deserializer::from_str(input);
-    let StrictValue(value) = StrictValue::deserialize(&mut deserializer)?;
+    let StrictValue(value) = StrictValue::<false>::deserialize(&mut deserializer)?;
     deserializer.end()?;
     Ok(value)
 }
 
+/// Parse duplicate-free JSON with every number interpreted as binary64.
+/// The caller must still validate I-JSON strings and nesting.
+pub(crate) fn from_str_binary64(input: &str) -> Result<Value, serde_json::Error> {
+    let mut deserializer = serde_json::Deserializer::from_str(input);
+    let StrictValue(value) = StrictValue::<true>::deserialize(&mut deserializer)?;
+    deserializer.end()?;
+    Ok(value)
+}
 /// A container the integer-token scan is inside, kept to report a path.
 ///
 /// A key is held as its raw literal, quotes and escapes included, and is

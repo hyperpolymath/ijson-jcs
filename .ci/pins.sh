@@ -4,7 +4,7 @@ readonly STANDARDS_REPOSITORY='metadatastician/standards'
 # Archive host used by scripts/standards/fetch.sh. Overridable so the pipeline
 # can be tested without the network (file:// or a local directory server).
 readonly STANDARDS_URL_BASE="${STANDARDS_URL_BASE:-https://codeload.github.com}"
-readonly STANDARDS_REV='d3e4b485a2af90c92a8e18af0888cd19cb132cd9'
+readonly STANDARDS_REV='f0b3cd4c464d33e1584f8528c17bce104555e256'
 readonly PROVEN_REV='eca682bcd419554f6779e72969902e6faef4fd9d'
 readonly PONS_REV='51b8920f541782ceb9465ea3f0d33c96104fc1fb'
 readonly PANIC_REV='b5530834a839734d1d181bfe6edb0d43d4233cf4'

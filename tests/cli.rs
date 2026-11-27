@@ -107,12 +107,14 @@ fn keys_sorted_by_utf16_code_units_including_non_bmp() {
 #[test]
 fn canon_rejects_invalid_input_with_exit_2() {
     for bad in [
-        &br#"{"a":1,"a":2}"#[..], // duplicate key
-        br#"["\ud800"]"#,         // lone surrogate
-        br#"[1e400]"#,            // outside double range
-        b"[\"\xff\"]",            // invalid UTF-8
-        br#"{"a":1} trailing"#,   // trailing garbage
-        br#"["\uffff"]"#,         // noncharacter
+        &br#"{"a":1,"a":2}"#[..],     // duplicate key
+        br#"["\ud800"]"#,             // lone surrogate
+        br#"[1e400]"#,                // outside double range
+        br#"[9007199254740993]"#,     // integer outside +/-(2^53-1)
+        br#"[18446744073709551616]"#, // integer beyond u64, read by serde as a float
+        b"[\"\xff\"]",                // invalid UTF-8
+        br#"{"a":1} trailing"#,       // trailing garbage
+        br#"["\uffff"]"#,             // noncharacter
     ] {
         let out = canon(bad);
         assert_eq!(
@@ -286,14 +288,17 @@ fn option_terminator_protects_all_filenames() {
 }
 
 #[test]
-fn fix_installs_integral_doubles_that_reparse_under_binary64() {
+fn fix_refuses_to_install_output_outside_the_strict_token_profile() {
     let path = temp_file("float.json", b"1e20");
     let out = run_on("fix", &[&path]);
-    assert_eq!(out.status.code(), Some(0));
-    assert_eq!(fs::read(&path).unwrap(), b"100000000000000000000\n");
+    assert_eq!(out.status.code(), Some(2));
+    assert_eq!(fs::read(path).unwrap(), b"1e20");
+    assert!(
+        String::from_utf8(out.stdout)
+            .unwrap()
+            .contains("canonical output violates")
+    );
     assert_eq!(canon_ok("1e20"), "100000000000000000000");
-    let again = run_on("check", &[&path]);
-    assert_eq!(again.status.code(), Some(0));
 }
 
 #[test]

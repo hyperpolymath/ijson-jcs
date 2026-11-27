@@ -212,8 +212,8 @@ fn files_command(
             }
             let mut wanted = canonical_form(&bytes)?;
             // A finite float can render as a bare integer beyond 2^53-1.
-            // Never replace a
-            // valid input with a file that our own checker would reject (a round-trip guard).
+            // Retain the existing strict token policy, but never replace a
+            // valid input with a file that our own checker would reject.
             canonical_form(&wanted).map_err(|e| format!(
                 "canonical output violates the strict file profile: {e}; use a string for exact integers, or canon for JCS bytes"
             ))?;

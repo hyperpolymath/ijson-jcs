@@ -207,7 +207,7 @@ mod tests {
             (b"\n", "INVALID"),
             (b"{\"a\":1}\n{\"b\":\n", "INVALID"),
             (b"{\"a\":1}\n{\"a\":1,\"a\":2}\n", "INVALID"),
-            (b"[1e400]\n", "INVALID"),
+            (b"[18446744073709551616]\n", "INVALID"),
             (b"1\n2\n", "CANONICAL"),
         ];
         for (input, want) in cases {

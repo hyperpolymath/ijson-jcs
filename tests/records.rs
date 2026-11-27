@@ -57,7 +57,7 @@ fn framing_matrix() {
         (b"\n", 2, "INVALID"),
         (b"{\"a\":1}\n{\"b\":\n", 2, "INVALID"),
         (b"{\"a\":1}\n{\"a\":1,\"a\":2}\n", 2, "INVALID"),
-        (b"[1e400]\n", 2, "INVALID"),
+        (b"[18446744073709551616]\n", 2, "INVALID"),
     ];
     for (input, want_exit, want_verdict) in cases {
         let shown = String::from_utf8_lossy(input);
@@ -162,14 +162,20 @@ fn fix_jsonl_leaves_invalid_files_untouched() {
     }
 }
 
-/// A record whose canonical form is an integral double beyond 2^53-1 is
-/// installed, because the binary64 reader reparses it.
+/// A record whose canonical form breaks the strict token profile is refused.
 #[test]
-fn fix_jsonl_installs_integral_doubles_that_reparse() {
+fn fix_jsonl_refuses_output_outside_the_strict_token_profile() {
     let path = temp_file("float.jsonl", b"1e20\n");
     let out = run_on("fix-jsonl", &[&path]);
-    assert_eq!(out.status.code(), Some(0));
-    assert_eq!(fs::read(&path).unwrap(), b"100000000000000000000\n");
+    assert_eq!(out.status.code(), Some(2));
+    assert_eq!(fs::read(&path).unwrap(), b"1e20\n");
+    assert!(
+        String::from_utf8(out.stdout)
+            .unwrap()
+            .contains("canonical output violates the strict file profile")
+    );
+    // `canon` still prints the record's canonical bytes; only the file
+    // rewrite refuses them, because a later `check` would reject the result.
     let out = canon(b"1e20\n");
     assert_eq!(out.status.code(), Some(0));
     assert_eq!(out.stdout, b"100000000000000000000");

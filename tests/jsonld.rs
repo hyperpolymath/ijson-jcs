@@ -73,7 +73,7 @@ fn invalid_documents_exit_two() {
     for bad in [
         &br#"{"@id":"a","@id":"b"}"#[..],
         br#"{"@id":"\ud800"}"#,
-        br#"{"@value":1e400}"#,
+        br#"{"@value":18446744073709551616}"#,
         br#"{"@id":"x"} trailing"#,
         b"{\"@id\":",
         b"[\"\\xff\"]",

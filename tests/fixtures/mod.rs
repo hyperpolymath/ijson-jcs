@@ -38,6 +38,18 @@ pub const PAIRS: &[Pair] = &[
         diagnostic: "noncharacter",
     },
     Pair {
+        class: "safe integer boundary",
+        clean: b"9007199254740991",
+        fault: b"9007199254740992",
+        diagnostic: "outside safe integer range",
+    },
+    Pair {
+        class: "integer token beyond u64",
+        clean: br#""18446744073709551616""#,
+        fault: b"18446744073709551616",
+        diagnostic: "outside safe integer range",
+    },
+    Pair {
         class: "float overflow",
         clean: b"1e308",
         fault: b"1e400",

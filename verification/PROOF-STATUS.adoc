@@ -59,10 +59,10 @@ planned by default (policy §1.2). Using both is not two independent witnesses:
 they share the SMT back-end trust, and a Verus model written separately from
 the production code is not a proof of that code.
 
-Entrypoints: `parse_json` and `parse_jcs` (`src/lib.rs`),
-`strict::from_str_no_duplicates` and `StrictVisitor` (`src/strict.rs`),
-`ijson::validate_canonicalizable` (`src/ijson.rs`). Since 0.2.0 Strict,
-Canonical and `parse_jcs` share one reader; `check_integer_tokens` is removed.
+Entrypoints: `parse_jcs` (`src/lib.rs`), `strict::from_str_binary64` and
+`StrictVisitor<true>` (`src/strict.rs`), `ijson::validate_canonicalizable`
+(`src/ijson.rs`). `strict::check_integer_tokens` belongs to the Strict and
+Canonical modes and is not on the `parse_jcs` path.
 
 [cols="3,2,3,1,3",options="header"]
 |===
@@ -85,7 +85,7 @@ variant remains open.
 |Creusot/Pearlite: panic-freedom of `parse_jcs`, the visitor and
 `validate_value`. Kani: not applicable to the library (see below).
 |Needs a contract for serde_json's `Deserializer` (trust boundary, `ASSUMED`).
-`visit_i64` and `visit_u64` use `as f64` beyond ±(2^53−1), which rounds to nearest even
+`visit_i64` and `visit_u64` use `as f64`, which rounds to nearest even
 (inferred from the Rust reference, not checked here).
 |`OPEN`
 |Creusot not installed here, so not run. `tests/properties.rs` feeds arbitrary
@@ -102,9 +102,9 @@ The grammar itself comes from serde_json (`ASSUMED`).
 |`OPEN`
 |Verus not installed here, so not run. Next action: write the predicate, then
 underflow to zero is the owner ruling of 2026-11-27 (matches ECMAScript
-`JSON.parse`) and is covered by tests; the depth bound is 127 parsed levels
-(serde_json recursion limit) against 128 for constructed values, also an owner
-ruling of 2026-11-27.
+`JSON.parse`) and is covered by a test; the 127-level parse bound (serde_json
+recursion limit, against 128 for constructed values) is also an owner ruling
+of 2026-11-27.
 
 |Round trip: `parse_jcs(emit(x))` has the same bits as `x` for every finite `x`
 (`-0.0` returns as `0.0` by design)
@@ -133,18 +133,13 @@ escaped-key case. No proof.
 |`TESTED`
 |Covered by `0 1`, `[1,]` and `{` cases. No proof.
 
-|Number model (0.2.0 owner ruling): `parse_json` Strict and Canonical and
-`parse_jcs` read every number as binary64; integer tokens beyond ±(2^53−1)
-round, nonzero underflow rounds to `0`, overflow is rejected
-|Creusot/Pearlite: every parse path goes through `StrictValue`, whose
-`visit_i64`/`visit_u64` are exact within ±(2^53−1) and otherwise defer to
-`visit_f64`, which refuses non-finite values. Verus: model of decimal-to-binary64
-rounding.
-|serde_json's decimal-to-double conversion, including underflow to zero, is
-trusted (`ASSUMED`).
+|Mode distinction preserved: `parse_json` Strict and Canonical still reject
+integer tokens outside ±(2^53−1), `parse_jcs` does not
+|Creusot/Pearlite: `parse_json` never instantiates `StrictValue<true>`; only
+`parse_jcs` does. Verus: model of the integer-token policy.
+|Const-generic flag `BINARY64` is `false` on every `parse_json` path.
 |`TESTED`
-|`tests/binary64_reader.rs`, `src/lib.rs` `test_binary64_number_model`.
-No proof.
+|`tests/binary64_reader.rs` checks five integer tokens in both modes. No proof.
 |===
 
 === Verifier availability on this host (2026-11-18)
@@ -163,6 +158,8 @@ run, and they produce `TESTED` evidence at most.
 
 Kani: the crate has `#![forbid(unsafe_code)]` and no FFI in the library, so
 there is no seam of the kind policy §4.1 reserves for Kani, and it is not
-applicable to `parse_jcs`. 
+applicable to `parse_jcs`. A bounded Kani harness on the byte scan in
+`check_integer_tokens` (indexing after a valid-JSON precondition) is possible
+later and would be `TESTED` with stated unwinding bounds.
 
 Canonical policy: metadatastician/standards `3-practice/PROOF-POLICY.adoc`.

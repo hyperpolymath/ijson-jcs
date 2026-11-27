@@ -230,7 +230,7 @@ fetched, expanded or compacted. This is **not** RDF dataset canonicalisation
 
 Input is always parsed as strict I-JSON (`JsonMode::Canonical`): duplicate
 keys, lone surrogates, noncharacters, invalid UTF-8, numbers outside the
-IEEE-754 double range are reported as invalid; integers beyond ±(2^53−1) round to binary64.
+IEEE-754 double range and integers outside ±(2^53−1) are reported as invalid.
 
 - **`check`** prints `OK path`, `NOT CANONICAL path` or `INVALID path: reason`
   for each file, on stdout.
@@ -346,7 +346,7 @@ JCS requires that object keys be sorted by UTF-16 code unit order, not simple st
 ### Number Handling
 
 - **Safe Integers**: Integers in [-(2^53)+1, (2^53)-1] are serialized as numbers
-- **Unsafe Integers**: A constructed `Value` holding a larger integer is a validation error (I-JSON recommendation); parsed text rounds to binary64 instead
+- **Unsafe Integers**: Larger integers are flagged as validation errors (I-JSON recommendation)
 - **Floats**: Allowed but users should consider string representation for exactness. Canonical output uses the ECMAScript `Number.prototype.toString` algorithm required by RFC 8785 §3.2.2.3 (`1E30` → `1e+30`, `4.50` → `4.5`, `-0` → `0`, `1e-7` → `1e-7`)
 - **Parsing**: Numbers are read with serde_json's `float_roundtrip` feature, so every decimal is rounded correctly to the nearest double; numbers outside the double range (e.g. `1e400`) are rejected
 - **Special Values**: NaN and Infinity are rejected (not valid RFC 8259 JSON)
@@ -471,7 +471,7 @@ scripts/standards/kyq-vectors.sh verify --binary target/release/ijson-jcs
 *Repository*: [hyperpolymath/ijson-jcs](https://github.com/hyperpolymath/ijson-jcs)  
 *License*: MPL-2.0  
 *Status*: Active development  
-*Version*: 0.2.0
+*Version*: 0.1.0
 
 ## Start and AI-assisted setup
 
@@ -485,29 +485,30 @@ Ask an assistant:
 
 Warm-ups for users, developers, platform maintainers and theorists are under
 `docs/onboarding/`; maintained wiki sources are under `docs/wiki/`.
-### Number model (0.2.0, breaking)
+### Reading JCS binary64 numbers
 
-`parse_json` in `Strict` and `Canonical` mode, and `parse_jcs` (an alias for
-`Canonical`), read every number as IEEE-754 binary64, the RFC 8785 model.
-Everything `to_jcs` emits therefore reparses, including an integral double such
-as `10000000000000000`.
+`parse_jcs(text)` is the explicit RFC 8785 number reader. It rejects duplicate
+names, noncharacters, lone surrogates, excessive nesting, non-finite numbers and
+trailing input, while interpreting every numeric token as IEEE-754 binary64.
+It accepts the complete numeric output of `to_jcs`, including an integral double
+such as `10000000000000000`. It accepts ordinary JSON layout; use the emitted
+JCS bytes for canonical layout and hashing.
 
-- An integer token beyond ±(2^53−1) rounds to the nearest double:
-  `9007199254740993` becomes `9007199254740992`. Use strings for identifiers or
-  arbitrary-precision values.
-- A nonzero token below the smallest subnormal rounds to zero: `1e-400` and
-  `-1e-400` become `0` (as in ECMAScript `JSON.parse`; the sign is dropped).
-- A token that overflows (`1e400`) is rejected as non-finite.
-- Container nesting is limited to 127 levels (the serde_json recursion limit);
-  a constructed value may be 128 deep (`MAX_DEPTH`), so one built at the limit
-  may not reparse.
-- Duplicate keys, noncharacters, lone surrogates and trailing input are still
-  rejected. Whitespace and key order need not be canonical.
+A nonzero token below the smallest subnormal rounds to zero (`1e-400` and
+`-1e-400` become `0`, as in ECMAScript `JSON.parse`); a token that overflows
+(`1e400`) is rejected. Nesting is limited to 127 levels (the serde_json
+recursion limit) while a constructed value may be 128 deep (`MAX_DEPTH`).
 
-**Migration from 0.1.0:** the safe-integer *token* rejection in `Strict` and
-`Canonical` is gone, so the `UnsafeInteger` error no longer arises from parsing
-text; `validate_i_json` still reports it for a `Value` you construct with an
-integer beyond ±(2^53−1). `Loose` is unchanged.
+This opt-in interpretation may round large integer tokens:
+`9007199254740993` becomes `9007199254740992`. Use `parse_json` with `Strict` or
+`Canonical` when a large integer token must instead be rejected before any
+loss of precision. Those existing modes and the CLI defaults retain their
+safe-integer policy. Use strings for identifiers or arbitrary-precision values.
+
+The distinction matters for round trips: strict ingress accepts `1e16`, whose
+JCS output is `10000000000000000`. That output belongs to the binary64 model;
+feeding it back into the stricter integer-token ingress policy rejects it.
+`parse_jcs` makes this boundary explicit instead of weakening strict validation.
 
 The RFC Appendix B tests now reparse every emitted numeric example and compare
 binary64 bits (normalizing negative zero). Additional generated tests exercise
